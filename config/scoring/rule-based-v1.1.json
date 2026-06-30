@@ -1,0 +1,81 @@
+{
+  "modelVersion": "rule-based-v1.1",
+  "scoreRange": {
+    "base": 50,
+    "min": 0,
+    "max": 100
+  },
+  "features": {
+    "horse.has_past_race": {
+      "type": "boolean",
+      "positiveValue": true,
+      "positiveAdjustment": 1.2,
+      "negativeAdjustment": -1.5
+    },
+    "horse.is_after_layoff_8w": {
+      "type": "boolean",
+      "positiveValue": false,
+      "positiveAdjustment": 0.8,
+      "negativeAdjustment": -1.5
+    },
+    "horse.days_since_last_race": {
+      "type": "interval_days",
+      "shortThresholdDays": 10,
+      "goodMaxDays": 35,
+      "layoffThresholdDays": 56,
+      "shortAdjustment": -1.5,
+      "goodAdjustment": 1.5,
+      "standardAdjustment": 0.8,
+      "layoffAdjustment": -1.5
+    },
+    "horse.surface_top3_rate": {
+      "type": "rate",
+      "baseline": 0.33,
+      "maxAdjustment": 6
+    },
+    "horse.distance_top3_rate": {
+      "type": "rate",
+      "baseline": 0.33,
+      "maxAdjustment": 6
+    },
+    "horse.track_condition_top3_rate": {
+      "type": "rate",
+      "baseline": 0.33,
+      "maxAdjustment": 4
+    },
+    "horse.course_top3_rate": {
+      "type": "rate",
+      "baseline": 0.33,
+      "maxAdjustment": 5
+    },
+    "horse.best_time_same_surface_distance": {
+      "type": "best_time",
+      "featureKey": "horse.best_time_same_surface_distance_ms",
+      "countFeatureKey": "horse.best_time_same_surface_distance_count",
+      "baseAdjustment": 1.5,
+      "minConfidence": 0.25,
+      "fullConfidenceCount": 4,
+      "defaultConfidence": 0.5
+    },
+    "jockey.venue_win_rate": {
+      "type": "rate",
+      "baseline": 0.33,
+      "maxAdjustment": 3
+    },
+    "jockey.venue_top3_rate": {
+      "type": "rate",
+      "baseline": 0.33,
+      "maxAdjustment": 4
+    },
+    "jockey.distance_win_rate": {
+      "type": "rate",
+      "baseline": 0.33,
+      "maxAdjustment": 3
+    },
+    "jockey.distance_top3_rate": {
+      "type": "rate",
+      "baseline": 0.33,
+      "maxAdjustment": 4
+    }
+  }
+}

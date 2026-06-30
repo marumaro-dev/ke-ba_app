@@ -1,0 +1,41 @@
+{
+  "version": "7",
+  "dialect": "postgresql",
+  "entries": [
+    {
+      "idx": 0,
+      "version": "7",
+      "when": 1782415050170,
+      "tag": "0000_phase_1_core",
+      "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1782559633526,
+      "tag": "0001_import_history",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1782566859190,
+      "tag": "0002_feature_engineering_p0",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1782593150383,
+      "tag": "0003_long_aaron_stack",
+      "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1782674606683,
+      "tag": "0004_sad_shadow_king",
+      "breakpoints": true
+    }
+  ]
+}
