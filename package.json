@@ -1,0 +1,47 @@
+{
+  "name": "keiba-app",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "eslint .",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "check": "npm run lint && npm run typecheck && npm run test && npm run build",
+    "db:generate": "drizzle-kit generate",
+    "db:migrate": "drizzle-kit migrate",
+    "db:seed": "tsx src/db/seed.ts",
+    "features:seed": "tsx src/db/seed-features.ts",
+    "features:generate": "tsx src/db/generate-features.ts",
+    "features:generate:dry-run": "tsx src/db/generate-features.ts --dry-run",
+    "predictions:generate": "tsx src/db/generate-predictions.ts",
+    "predictions:generate:dry-run": "tsx src/db/generate-predictions.ts --dry-run",
+    "predictions:evaluate": "tsx src/db/evaluate-predictions.ts",
+    "predictions:evaluate:dry-run": "tsx src/db/evaluate-predictions.ts --dry-run",
+    "db:import:csv": "tsx src/db/import-csv.ts",
+    "db:import:csv:dry-run": "tsx src/db/import-csv.ts --dry-run"
+  },
+  "dependencies": {
+    "@supabase/ssr": "latest",
+    "@supabase/supabase-js": "latest",
+    "drizzle-orm": "latest",
+    "next": "latest",
+    "postgres": "latest",
+    "react": "latest",
+    "react-dom": "latest",
+    "zod": "latest"
+  },
+  "devDependencies": {
+    "@types/node": "latest",
+    "@types/react": "latest",
+    "@types/react-dom": "latest",
+    "drizzle-kit": "latest",
+    "eslint": "latest",
+    "eslint-config-next": "latest",
+    "tsx": "latest",
+    "typescript": "latest",
+    "vitest": "latest"
+  }
+}

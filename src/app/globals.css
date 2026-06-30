@@ -1,0 +1,1111 @@
+:root {
+  --background: #f4f1e8;
+  --surface: #fffdf8;
+  --text: #17211d;
+  --muted: #66706a;
+  --line: #d8d5ca;
+  --primary: #154c3c;
+  --primary-soft: #dce9e3;
+  --accent: #b47831;
+  --shadow: 0 16px 40px rgb(39 48 43 / 8%);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html {
+  background: var(--background);
+}
+
+body {
+  min-height: 100vh;
+  margin: 0;
+  background:
+    radial-gradient(circle at top right, rgb(180 120 49 / 12%), transparent 28rem),
+    var(--background);
+  color: var(--text);
+  font-family:
+    "Hiragino Kaku Gothic ProN", "Yu Gothic", "YuGothic", system-ui, sans-serif;
+  line-height: 1.7;
+}
+
+a {
+  color: inherit;
+}
+
+.site-header {
+  border-bottom: 1px solid rgb(23 33 29 / 10%);
+  background: rgb(244 241 232 / 88%);
+  backdrop-filter: blur(16px);
+}
+
+.site-header__inner,
+.page-shell,
+.site-footer {
+  width: min(1120px, calc(100% - 2rem));
+  margin-inline: auto;
+}
+
+.site-header__inner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  min-height: 72px;
+}
+
+.brand {
+  color: var(--primary);
+  font-family: Georgia, "Yu Mincho", serif;
+  font-size: 1.35rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-decoration: none;
+}
+
+nav a {
+  color: var(--muted);
+  font-size: 0.92rem;
+  font-weight: 700;
+  text-decoration: none;
+}
+
+nav {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+
+.page-shell {
+  min-height: calc(100vh - 170px);
+  padding-block: 4rem 5rem;
+}
+
+.site-footer {
+  border-top: 1px solid var(--line);
+  padding-block: 1.5rem 2.5rem;
+  color: var(--muted);
+  font-size: 0.78rem;
+}
+
+h1,
+h2,
+p {
+  margin-top: 0;
+}
+
+h1,
+h2 {
+  line-height: 1.3;
+}
+
+.hero {
+  max-width: 780px;
+  padding-block: 4rem;
+}
+
+.hero h1 {
+  max-width: 680px;
+  margin-bottom: 1.5rem;
+  font-family: Georgia, "Yu Mincho", serif;
+  font-size: clamp(2.5rem, 7vw, 5.6rem);
+  font-weight: 500;
+  letter-spacing: -0.045em;
+}
+
+.hero__lead {
+  max-width: 650px;
+  margin-bottom: 2rem;
+  color: var(--muted);
+  font-size: 1.05rem;
+}
+
+.eyebrow {
+  margin-bottom: 0.75rem;
+  color: var(--accent);
+  font-size: 0.75rem;
+  font-weight: 800;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+}
+
+.primary-link {
+  display: inline-flex;
+  align-items: center;
+  min-height: 48px;
+  padding: 0.7rem 1.2rem;
+  border-radius: 999px;
+  background: var(--primary);
+  color: white;
+  font-weight: 700;
+  text-decoration: none;
+}
+
+.button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 42px;
+  padding: 0.65rem 1rem;
+  border: 1px solid var(--primary);
+  border-radius: 999px;
+  background: var(--primary);
+  color: white;
+  font: inherit;
+  font-size: 0.86rem;
+  font-weight: 800;
+  line-height: 1;
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.button--secondary {
+  background: transparent;
+  color: var(--primary);
+}
+
+.button[aria-disabled="true"] {
+  opacity: 0.42;
+  pointer-events: none;
+}
+
+.page-heading,
+.section-heading {
+  display: flex;
+  align-items: end;
+  justify-content: space-between;
+  gap: 2rem;
+  margin-bottom: 2rem;
+}
+
+.page-heading h1,
+.race-hero h1 {
+  margin-bottom: 0;
+  font-family: Georgia, "Yu Mincho", serif;
+  font-size: clamp(2rem, 5vw, 3.8rem);
+  font-weight: 500;
+}
+
+.page-heading__note,
+.section-heading > p {
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+
+.filter-panel {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 1rem;
+  margin-bottom: 1rem;
+  padding: 1rem;
+  border: 1px solid rgb(23 33 29 / 9%);
+  border-radius: 20px;
+  background: var(--surface);
+  box-shadow: var(--shadow);
+}
+
+.filter-panel--imports {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.filter-panel--analytics {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.filter-panel label {
+  display: grid;
+  gap: 0.35rem;
+}
+
+.filter-panel label span {
+  color: var(--muted);
+  font-size: 0.76rem;
+  font-weight: 800;
+}
+
+.filter-panel select,
+.filter-panel input {
+  min-height: 42px;
+  width: 100%;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: white;
+  color: var(--text);
+  font: inherit;
+  font-size: 0.9rem;
+  padding-inline: 0.8rem;
+}
+
+.filter-panel__actions {
+  display: flex;
+  align-items: end;
+  gap: 0.5rem;
+}
+
+.list-summary,
+.pagination {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.list-summary {
+  margin-bottom: 1rem;
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+
+.list-summary p,
+.pagination p {
+  margin: 0;
+}
+
+.race-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 320px), 1fr));
+  gap: 1rem;
+}
+
+.race-card,
+.race-hero,
+.empty-state {
+  border: 1px solid rgb(23 33 29 / 9%);
+  border-radius: 20px;
+  background: var(--surface);
+  box-shadow: var(--shadow);
+}
+
+.race-card {
+  padding: 1.4rem;
+}
+
+.race-card__topline {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 1.2rem;
+  color: var(--muted);
+  font-size: 0.8rem;
+}
+
+.race-card__number {
+  margin-bottom: 0.2rem;
+  color: var(--accent);
+  font-weight: 800;
+}
+
+.race-card h2 {
+  margin-bottom: 1.5rem;
+  font-size: 1.25rem;
+}
+
+.race-card h2 a {
+  text-decoration-color: rgb(21 76 60 / 30%);
+  text-underline-offset: 0.25rem;
+}
+
+.status {
+  padding: 0.15rem 0.55rem;
+  border-radius: 999px;
+  background: var(--primary-soft);
+  color: var(--primary);
+  font-weight: 800;
+}
+
+.status--cancelled {
+  background: #f4dddd;
+  color: #842f2f;
+}
+
+.status--entry-scratched,
+.status--entry-excluded {
+  background: #f4dddd;
+  color: #842f2f;
+}
+
+.status--import-running {
+  background: #fff1cf;
+  color: #7a4f00;
+}
+
+.status--import-failed {
+  background: #f4dddd;
+  color: #842f2f;
+}
+
+.status--feature-running {
+  background: #fff1cf;
+  color: #7a4f00;
+}
+
+.status--feature-failed {
+  background: #f4dddd;
+  color: #842f2f;
+}
+
+.race-card__facts,
+.race-hero__meta {
+  display: grid;
+  gap: 0.65rem;
+  margin: 0;
+}
+
+.race-card__facts div,
+.race-hero__meta div {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  border-top: 1px solid var(--line);
+  padding-top: 0.65rem;
+}
+
+dt {
+  color: var(--muted);
+  font-size: 0.78rem;
+}
+
+dd {
+  margin: 0;
+  font-size: 0.86rem;
+  font-weight: 700;
+  text-align: right;
+}
+
+.back-link {
+  display: inline-block;
+  margin-bottom: 1.5rem;
+  color: var(--muted);
+  font-size: 0.85rem;
+  font-weight: 700;
+  text-decoration: none;
+}
+
+.race-hero {
+  display: grid;
+  grid-template-columns: minmax(0, 1.6fr) minmax(260px, 0.8fr);
+  gap: 3rem;
+  margin-bottom: 3rem;
+  padding: clamp(1.5rem, 4vw, 3rem);
+}
+
+.race-hero__condition {
+  margin-top: 1rem;
+  color: var(--muted);
+}
+
+.section-heading h2 {
+  margin: 0;
+  font-size: 1.7rem;
+}
+
+.table-wrap {
+  overflow-x: auto;
+  border: 1px solid rgb(23 33 29 / 9%);
+  border-radius: 18px;
+  background: var(--surface);
+  box-shadow: var(--shadow);
+}
+
+.table-wrap--compact {
+  margin-bottom: 2rem;
+}
+
+table {
+  width: 100%;
+  min-width: 980px;
+  border-collapse: collapse;
+}
+
+th,
+td {
+  border-bottom: 1px solid var(--line);
+  padding: 0.9rem 0.8rem;
+  font-size: 0.85rem;
+  text-align: left;
+  vertical-align: middle;
+}
+
+th {
+  color: var(--muted);
+  font-size: 0.72rem;
+  letter-spacing: 0.05em;
+  white-space: nowrap;
+}
+
+tbody tr:last-child td {
+  border-bottom: 0;
+}
+
+.frame {
+  display: inline-grid;
+  width: 2rem;
+  height: 2rem;
+  place-items: center;
+  border: 1px solid rgb(0 0 0 / 15%);
+  border-radius: 6px;
+  background: #fff;
+  color: #111;
+  font-weight: 900;
+}
+
+.frame--2 {
+  background: #222;
+  color: #fff;
+}
+
+.frame--3 {
+  background: #d74a42;
+  color: #fff;
+}
+
+.frame--4 {
+  background: #315b9b;
+  color: #fff;
+}
+
+.frame--5 {
+  background: #e0bd3b;
+}
+
+.frame--6 {
+  background: #4f9d62;
+  color: #fff;
+}
+
+.frame--7 {
+  background: #df7f42;
+  color: #fff;
+}
+
+.frame--8 {
+  background: #e39cab;
+}
+
+.horse-number {
+  font-size: 1rem;
+  font-weight: 900;
+}
+
+.horse-cell strong {
+  display: block;
+}
+
+.subtle {
+  display: block;
+  color: var(--muted);
+  font-size: 0.72rem;
+}
+
+.data-note {
+  margin-top: 1rem;
+  color: var(--muted);
+  font-size: 0.78rem;
+}
+
+.path-cell {
+  max-width: 24rem;
+  overflow-wrap: anywhere;
+}
+
+.mono {
+  font-family:
+    "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+  font-size: 0.78rem;
+}
+
+.metric-grid {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 1rem;
+  margin-bottom: 3rem;
+}
+
+.metric-grid--features {
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+}
+
+.metric-grid--analytics {
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+}
+
+.metric-card {
+  border: 1px solid rgb(23 33 29 / 9%);
+  border-radius: 18px;
+  background: var(--surface);
+  box-shadow: var(--shadow);
+  padding: 1rem;
+}
+
+.metric-card span {
+  display: block;
+  color: var(--muted);
+  font-size: 0.72rem;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+}
+
+.metric-card strong {
+  display: block;
+  margin-top: 0.35rem;
+  color: var(--primary);
+  font-size: 1.6rem;
+  line-height: 1.2;
+}
+
+.json-block,
+.json-inline {
+  margin: 0;
+  overflow-x: auto;
+  border: 1px solid rgb(23 33 29 / 9%);
+  background: #17211d;
+  color: #f5f1e6;
+  font-family:
+    "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+  font-size: 0.78rem;
+  line-height: 1.6;
+  white-space: pre-wrap;
+}
+
+.json-block {
+  border-radius: 18px;
+  box-shadow: var(--shadow);
+  margin-bottom: 3rem;
+  padding: 1rem;
+}
+
+.json-inline {
+  max-width: 28rem;
+  border-radius: 10px;
+  padding: 0.65rem;
+}
+
+.section-heading--spaced {
+  margin-top: 1rem;
+}
+
+.section-block {
+  margin-top: 2rem;
+}
+
+.empty-state {
+  padding: 3rem;
+  text-align: center;
+}
+
+.empty-state--compact {
+  margin-bottom: 2rem;
+  padding: 2rem;
+}
+
+.empty-state p {
+  color: var(--muted);
+}
+
+.feature-list {
+  display: grid;
+  min-width: 15rem;
+  gap: 0.35rem;
+}
+
+.feature-list--empty {
+  min-width: 12rem;
+  color: var(--muted);
+}
+
+.feature-list--empty strong {
+  color: var(--text);
+}
+
+.feature-list--empty span {
+  font-size: 0.72rem;
+}
+
+.feature-chip {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.8rem;
+  border-bottom: 1px solid var(--line);
+  padding-bottom: 0.25rem;
+}
+
+.feature-chip span {
+  color: var(--muted);
+  font-size: 0.72rem;
+  white-space: nowrap;
+}
+
+.feature-chip strong {
+  font-size: 0.82rem;
+  white-space: nowrap;
+}
+
+.feature-asof {
+  margin: 0.35rem 0 0;
+  color: var(--muted);
+  font-size: 0.7rem;
+}
+
+.entry-card-grid {
+  display: grid;
+  gap: 1.25rem;
+}
+
+.entry-card {
+  display: grid;
+  gap: 1.25rem;
+  border: 1px solid rgb(23 33 29 / 9%);
+  border-radius: 22px;
+  background: var(--surface);
+  box-shadow: var(--shadow);
+  padding: clamp(1rem, 3vw, 1.5rem);
+}
+
+.entry-card__header {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 1rem;
+}
+
+.entry-card__header h3 {
+  margin: 0;
+  font-size: 1.25rem;
+}
+
+.entry-card__header p {
+  margin: 0.25rem 0 0;
+  color: var(--muted);
+  font-size: 0.82rem;
+}
+
+.entry-card__number {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.65rem;
+}
+
+.entry-card__facts {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: 0.65rem;
+  margin: 0;
+}
+
+.entry-card__facts div {
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  padding: 0.7rem;
+}
+
+.entry-card__facts dd {
+  margin-top: 0.25rem;
+  text-align: left;
+}
+
+.feature-empty {
+  display: grid;
+  gap: 0.2rem;
+  border: 1px dashed rgb(21 76 60 / 30%);
+  border-radius: 16px;
+  background: var(--primary-soft);
+  padding: 1rem;
+}
+
+.feature-empty span {
+  color: var(--muted);
+  font-size: 0.8rem;
+}
+
+.prediction-card {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.75rem;
+  border: 1px solid rgb(21 76 60 / 18%);
+  border-radius: 18px;
+  background: var(--primary-soft);
+  padding: 1rem;
+}
+
+.prediction-card div {
+  border-radius: 14px;
+  background: white;
+  padding: 0.8rem;
+}
+
+.prediction-card span {
+  display: block;
+  color: var(--muted);
+  font-size: 0.72rem;
+  font-weight: 800;
+}
+
+.prediction-card strong {
+  display: block;
+  margin-top: 0.25rem;
+  color: var(--primary);
+  font-size: 1.5rem;
+}
+
+.prediction-card p {
+  grid-column: 1 / -1;
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.78rem;
+}
+
+.prediction-card--expanded {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.prediction-reason-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.75rem;
+}
+
+.prediction-reasons {
+  border-radius: 14px;
+  background: white;
+  padding: 0.85rem;
+}
+
+.prediction-reasons h4 {
+  margin: 0 0 0.55rem;
+  font-size: 0.86rem;
+}
+
+.prediction-reasons p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.78rem;
+}
+
+.prediction-reasons ul {
+  display: grid;
+  gap: 0.45rem;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.prediction-reasons li {
+  display: flex;
+  align-items: start;
+  gap: 0.55rem;
+  color: var(--muted);
+  font-size: 0.78rem;
+}
+
+.prediction-reasons li strong {
+  min-width: 3.5rem;
+  color: var(--primary);
+  font-size: 0.82rem;
+}
+
+.prediction-notice {
+  border: 1px solid rgb(21 76 60 / 18%);
+  border-radius: 18px;
+  background: var(--primary-soft);
+  margin-bottom: 2rem;
+  padding: 1.2rem;
+}
+
+.prediction-notice h2,
+.prediction-notice p {
+  margin: 0;
+}
+
+.prediction-notice h2 {
+  margin-bottom: 0.35rem;
+  font-size: 1.1rem;
+}
+
+.prediction-notice p {
+  color: var(--muted);
+}
+
+.prediction-race-list,
+.prediction-entry-list {
+  display: grid;
+  gap: 1rem;
+}
+
+.prediction-race-card {
+  border: 1px solid rgb(23 33 29 / 9%);
+  border-radius: 20px;
+  background: var(--surface);
+  box-shadow: var(--shadow);
+  padding: 1rem;
+}
+
+.prediction-race-card__header {
+  display: flex;
+  align-items: start;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 1rem;
+}
+
+.prediction-race-card__header h3 {
+  margin: 0;
+}
+
+.prediction-entry-card {
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  background: #fffdf7;
+  padding: 1rem;
+}
+
+.prediction-entry-card__top {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) repeat(4, auto);
+  gap: 1rem;
+  margin-bottom: 0.85rem;
+}
+
+.prediction-entry-card__top div {
+  display: grid;
+  gap: 0.15rem;
+}
+
+.prediction-entry-card__top span,
+.prediction-entry-card__top small {
+  color: var(--muted);
+  font-size: 0.75rem;
+}
+
+.prediction-entry-card__top strong {
+  color: var(--text);
+}
+
+.evaluation-summary {
+  display: grid;
+  gap: 0.25rem;
+  color: var(--muted);
+  font-size: 0.78rem;
+  text-align: right;
+}
+
+.status--reference {
+  background: #fff1cf;
+  color: #7a4f00;
+}
+
+.comparison-panel {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: 0.8rem;
+  margin-bottom: 1rem;
+  border: 1px solid rgb(21 76 60 / 18%);
+  border-radius: 20px;
+  background: var(--primary-soft);
+  padding: 1rem;
+}
+
+.comparison-panel div {
+  border-radius: 14px;
+  background: white;
+  padding: 0.85rem;
+}
+
+.comparison-panel span,
+.comparison-panel small {
+  display: block;
+  color: var(--muted);
+  font-size: 0.72rem;
+  font-weight: 800;
+}
+
+.comparison-panel strong {
+  display: block;
+  margin-top: 0.25rem;
+  color: var(--primary);
+  font-size: 1.15rem;
+}
+
+.model-card-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 280px), 1fr));
+  gap: 1rem;
+}
+
+.model-comparison-card {
+  border: 1px solid rgb(23 33 29 / 9%);
+  border-radius: 20px;
+  background: var(--surface);
+  box-shadow: var(--shadow);
+  padding: 1rem;
+}
+
+.model-comparison-card__header {
+  display: flex;
+  align-items: start;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 0.85rem;
+}
+
+.model-comparison-card h3 {
+  margin: 0;
+}
+
+.model-comparison-card dl {
+  display: grid;
+  gap: 0.55rem;
+  margin: 0;
+}
+
+.model-comparison-card dl div {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  border-top: 1px solid var(--line);
+  padding-top: 0.55rem;
+}
+
+.contribution-stack {
+  display: grid;
+  min-width: 14rem;
+  gap: 0.25rem;
+}
+
+.contribution-stack span {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  color: var(--muted);
+  font-size: 0.78rem;
+}
+
+.contribution-stack strong {
+  color: var(--primary);
+}
+
+.feature-groups {
+  display: grid;
+  gap: 0.8rem;
+}
+
+.feature-priority {
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  background: #fffdf7;
+  overflow: hidden;
+}
+
+.feature-priority summary {
+  cursor: pointer;
+  padding: 0.8rem 1rem;
+  color: var(--primary);
+  font-weight: 900;
+}
+
+.feature-category-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.75rem;
+  border-top: 1px solid var(--line);
+  padding: 1rem;
+}
+
+.feature-category {
+  border: 1px solid rgb(23 33 29 / 8%);
+  border-radius: 14px;
+  background: white;
+  padding: 0.8rem;
+}
+
+.feature-category h4 {
+  margin: 0 0 0.65rem;
+  font-size: 0.9rem;
+}
+
+.feature-row {
+  display: flex;
+  align-items: start;
+  justify-content: space-between;
+  gap: 0.8rem;
+  border-top: 1px solid var(--line);
+  padding-block: 0.55rem;
+}
+
+.feature-row:first-of-type {
+  border-top: 0;
+  padding-top: 0;
+}
+
+.feature-row span {
+  color: var(--muted);
+  font-size: 0.78rem;
+}
+
+.feature-row small {
+  display: block;
+  margin-top: 0.1rem;
+  color: rgb(88 100 94 / 70%);
+  font-size: 0.68rem;
+}
+
+.feature-row strong {
+  white-space: nowrap;
+}
+
+.pagination {
+  margin-top: 1.5rem;
+  justify-content: center;
+}
+
+.pagination span {
+  min-width: 6rem;
+  color: var(--muted);
+  font-size: 0.85rem;
+  font-weight: 800;
+  text-align: center;
+}
+
+@media (max-width: 720px) {
+  .page-shell {
+    padding-block: 2.5rem 4rem;
+  }
+
+  .page-heading,
+  .section-heading {
+    align-items: start;
+    flex-direction: column;
+    gap: 0.5rem;
+  }
+
+  .filter-panel {
+    grid-template-columns: 1fr;
+  }
+
+  .filter-panel--imports,
+  .filter-panel--analytics,
+  .filter-panel--features,
+  .metric-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .filter-panel__actions {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .race-hero {
+    grid-template-columns: 1fr;
+    gap: 2rem;
+  }
+
+  .entry-card__header,
+  .entry-card__facts,
+  .prediction-card,
+  .prediction-reason-grid,
+  .prediction-entry-card__top,
+  .feature-category-grid,
+  .comparison-panel {
+    grid-template-columns: 1fr;
+  }
+}
