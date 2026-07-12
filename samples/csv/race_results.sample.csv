@@ -1,0 +1,4 @@
+id,provider_code,source_result_id,source_entry_id,finish_position,finish_status,finish_time_milliseconds,margin,final_odds,popularity,status,available_at,observed_at,imported_at
+75000000-0000-4000-8000-000000000001,licensed_csv_demo,DEMO-RESULT-001,DEMO-ENTRY-001,1,finished,93400,,3.8,2,confirmed,2026-07-04T15:43:00+09:00,2026-07-04T15:46:00+09:00,2026-07-04T15:47:00+09:00
+75000000-0000-4000-8000-000000000002,licensed_csv_demo,DEMO-RESULT-002,DEMO-ENTRY-002,2,finished,93600,1 1/4,2.6,1,confirmed,2026-07-04T15:43:00+09:00,2026-07-04T15:46:00+09:00,2026-07-04T15:47:00+09:00
+75000000-0000-4000-8000-000000000003,licensed_csv_demo,DEMO-RESULT-003,DEMO-ENTRY-003,3,finished,93800,1 1/2,6.4,3,confirmed,2026-07-04T15:43:00+09:00,2026-07-04T15:46:00+09:00,2026-07-04T15:47:00+09:00
