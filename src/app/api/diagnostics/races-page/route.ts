@@ -109,11 +109,9 @@ export async function GET() {
     };
   });
 
-  const pagePromiseAllAndFormatting = await runStage(async () => {
-    const [raceList, filterOptions] = await Promise.all([
-      listRaces(filters),
-      getRaceFilterOptions(),
-    ]);
+  const pageSequentialAndFormatting = await runStage(async () => {
+    const raceList = await listRaces(filters);
+    const filterOptions = await getRaceFilterOptions();
 
     // Exercise the same formatting and mapping paths used by page.tsx without
     // returning the formatted values or any source row data.
@@ -143,7 +141,7 @@ export async function GET() {
     venueDistinctQuery,
     listRacesFunction,
     filterOptionsFunction,
-    pagePromiseAllAndFormatting,
+    pageSequentialAndFormatting,
   };
   const failedStage = Object.entries(stages).find(
     ([, stage]) => stage.status !== "ok",
