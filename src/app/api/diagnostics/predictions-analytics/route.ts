@@ -33,12 +33,21 @@ type DiagnosticStatus =
   | "ok"
   | "timeout"
   | "relation_missing"
+  | "column_missing"
+  | "schema_mismatch"
+  | "invalid_join"
+  | "invalid_query"
+  | "env_invalid"
+  | "driver_error"
   | "unknown_error";
+
+type ErrorKind = Exclude<DiagnosticStatus, "ok">;
 
 type StageDiagnostic<T extends object> = {
   status: DiagnosticStatus;
   elapsedMs: number;
   result?: T;
+  errorKind?: ErrorKind;
 };
 
 // Temporary Preview-only diagnostic route. Remove it after the analytics page
@@ -233,8 +242,9 @@ async function runDatabaseStage<T extends object>(
 
   if (!databaseUrl) {
     return {
-      status: "unknown_error",
+      status: "env_invalid",
       elapsedMs: Math.round(performance.now() - startedAt),
+      errorKind: "env_invalid",
     };
   }
 
@@ -249,16 +259,19 @@ async function runDatabaseStage<T extends object>(
       result,
     };
   } catch (error: unknown) {
+    const errorKind = classifyError(error);
+
     return {
-      status: classifyError(error),
+      status: errorKind,
       elapsedMs: Math.round(performance.now() - startedAt),
+      errorKind,
     };
   } finally {
     await client.end({ timeout: 1 }).catch(() => undefined);
   }
 }
 
-function classifyError(error: unknown): DiagnosticStatus {
+function classifyError(error: unknown): ErrorKind {
   if (error instanceof DiagnosticTimeoutError) {
     return "timeout";
   }
@@ -269,12 +282,51 @@ function classifyError(error: unknown): DiagnosticStatus {
     return "relation_missing";
   }
 
+  if (code === "42703") {
+    return "column_missing";
+  }
+
+  if (code === "3F000") {
+    return "schema_mismatch";
+  }
+
+  if (code === "42804" || code === "42883") {
+    return "invalid_join";
+  }
+
+  if (
+    code === "42601" ||
+    code === "42702" ||
+    code === "42P10" ||
+    code === "42P18" ||
+    code === "UNDEFINED_VALUE"
+  ) {
+    return "invalid_query";
+  }
+
   if (
     code === "CONNECT_TIMEOUT" ||
     code === "ETIMEDOUT" ||
     code === "57014"
   ) {
     return "timeout";
+  }
+
+  if (
+    code?.startsWith("08") ||
+    code?.startsWith("28") ||
+    code === "42501" ||
+    code === "ECONNRESET" ||
+    code === "ENOTFOUND"
+  ) {
+    return "driver_error";
+  }
+
+  if (
+    hasErrorName(error, "DrizzleQueryError") ||
+    hasErrorName(error, "PostgresError")
+  ) {
+    return "driver_error";
   }
 
   return "unknown_error";
@@ -287,16 +339,38 @@ function normalizeEnvironment(value: string | undefined) {
 }
 
 function getErrorCode(error: unknown) {
-  if (
-    typeof error === "object" &&
-    error !== null &&
-    "code" in error &&
-    typeof error.code === "string"
-  ) {
-    return error.code;
+  for (const current of getErrorChain(error)) {
+    if (
+      "code" in current &&
+      typeof current.code === "string"
+    ) {
+      return current.code;
+    }
   }
 
   return undefined;
+}
+
+function hasErrorName(error: unknown, expectedName: string) {
+  return getErrorChain(error).some(
+    current => "name" in current && current.name === expectedName,
+  );
+}
+
+function getErrorChain(error: unknown) {
+  const chain: object[] = [];
+  let current = error;
+
+  for (let depth = 0; depth < 4; depth += 1) {
+    if (typeof current !== "object" || current === null) {
+      break;
+    }
+
+    chain.push(current);
+    current = "cause" in current ? current.cause : undefined;
+  }
+
+  return chain;
 }
 
 async function withTimeout<T>(promise: Promise<T>, timeoutMs: number) {
