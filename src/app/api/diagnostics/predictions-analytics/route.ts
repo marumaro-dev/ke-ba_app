@@ -73,7 +73,7 @@ export async function GET(request: Request) {
     Object.fromEntries(new URL(request.url).searchParams.entries()),
   );
 
-  const directCountQuery = await runDirectStage(async (client) => {
+  const racePredictionsCountQuery = await runDirectStage(async (client) => {
     const rows = await client`
       select count(*)::int as value
       from race_predictions
@@ -81,6 +81,26 @@ export async function GET(request: Request) {
 
     return { count: Number(rows[0]?.value ?? 0) };
   });
+
+  const predictionRunsCountQuery = await runDirectStage(async (client) => {
+    const rows = await client`
+      select count(*)::int as value
+      from prediction_runs
+    `;
+
+    return { count: Number(rows[0]?.value ?? 0) };
+  });
+
+  const predictionEvaluationsCountQuery = await runDirectStage(
+    async (client) => {
+      const rows = await client`
+        select count(*)::int as value
+        from prediction_evaluations
+      `;
+
+      return { count: Number(rows[0]?.value ?? 0) };
+    },
+  );
 
   const countQuery = await runDatabaseStage(async (db) => {
     const rows = await db.select({ value: count() }).from(racePredictions);
@@ -125,7 +145,9 @@ export async function GET(request: Request) {
   });
 
   const stages = {
-    directCountQuery,
+    racePredictionsCountQuery,
+    predictionRunsCountQuery,
+    predictionEvaluationsCountQuery,
     countQuery,
     predictionEvaluationJoinQuery,
     modelVersionDistinctQuery,
