@@ -58,16 +58,14 @@ export async function listRaces(params: RaceListSearchParams) {
 
 export async function getRaceFilterOptions() {
   const db = getDb();
-  const [raceDates, venues] = await Promise.all([
-    db
-      .selectDistinct({ value: races.raceDate })
-      .from(races)
-      .orderBy(asc(races.raceDate)),
-    db
-      .selectDistinct({ value: races.venue })
-      .from(races)
-      .orderBy(asc(races.venue)),
-  ]);
+  const raceDates = await db
+    .selectDistinct({ value: races.raceDate })
+    .from(races)
+    .orderBy(asc(races.raceDate));
+  const venues = await db
+    .selectDistinct({ value: races.venue })
+    .from(races)
+    .orderBy(asc(races.venue));
 
   return {
     raceDates: raceDates.map((row) => row.value),

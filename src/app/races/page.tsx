@@ -39,10 +39,8 @@ const surfaceFilterLabels = {
 
 export default async function RacesPage({ searchParams }: RacesPageProps) {
   const filters = parseRaceListSearchParams(await searchParams);
-  const [raceList, filterOptions] = await Promise.all([
-    listRaces(filters),
-    getRaceFilterOptions(),
-  ]);
+  const raceList = await listRaces(filters);
+  const filterOptions = await getRaceFilterOptions();
   const hasActiveFilter = Boolean(
     filters.raceDate || filters.venue || filters.surface !== "all",
   );

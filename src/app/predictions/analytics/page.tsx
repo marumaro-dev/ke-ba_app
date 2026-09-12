@@ -29,7 +29,29 @@ export default async function PredictionAnalyticsPage({
   searchParams,
 }: PredictionAnalyticsPageProps) {
   const filters = parsePredictionAnalyticsSearchParams(await searchParams);
-  const { summary, modelVersions } = await getPredictionAnalytics(filters);
+  let analytics: Awaited<ReturnType<typeof getPredictionAnalytics>>;
+
+  try {
+    analytics = await getPredictionAnalytics(filters);
+  } catch {
+    return (
+      <section>
+        <div className="page-heading">
+          <div>
+            <p className="eyebrow">Prediction Analytics</p>
+            <h1>予測分析</h1>
+          </div>
+        </div>
+
+        <div className="empty-state">
+          <h2>予測分析データを表示できませんでした</h2>
+          <p>データ投入後に再確認してください。</p>
+        </div>
+      </section>
+    );
+  }
+
+  const { summary, modelVersions } = analytics;
   const hasActiveFilter =
     filters.modelVersion !== "all" ||
     filters.asOfDate !== "" ||
