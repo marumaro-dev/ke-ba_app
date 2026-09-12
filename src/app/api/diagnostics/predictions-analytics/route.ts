@@ -161,8 +161,8 @@ function createDiagnosticDatabase(databaseUrl: string) {
   const client = postgres(databaseUrl, {
     max: 1,
     prepare: false,
-    connect_timeout: 5,
-    idle_timeout: 5,
+    connect_timeout: 10,
+    idle_timeout: 20,
   });
 
   return {
