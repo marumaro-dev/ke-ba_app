@@ -48,6 +48,15 @@ type StageDiagnostic<T extends object> = {
   elapsedMs: number;
   result?: T;
   errorKind?: ErrorKind;
+  errorName?: string;
+  topLevelCode?: string;
+  causeCode?: string;
+  causeName?: string;
+  severity?: string;
+  routine?: string;
+  table?: string;
+  column?: string;
+  constraint?: string;
 };
 
 // Temporary Preview-only diagnostic route. Remove it after the analytics page
@@ -64,20 +73,17 @@ export async function GET(request: Request) {
     Object.fromEntries(new URL(request.url).searchParams.entries()),
   );
 
+  const directCountQuery = await runDirectStage(async (client) => {
+    const rows = await client`
+      select count(*)::int as value
+      from race_predictions
+    `;
+
+    return { count: Number(rows[0]?.value ?? 0) };
+  });
+
   const countQuery = await runDatabaseStage(async (db) => {
-    const conditions = buildConditions(filters);
-    const rows = await db
-      .select({ value: count() })
-      .from(racePredictions)
-      .innerJoin(
-        predictionRuns,
-        eq(racePredictions.predictionRunId, predictionRuns.id),
-      )
-      .leftJoin(
-        predictionEvaluations,
-        eq(racePredictions.id, predictionEvaluations.racePredictionId),
-      )
-      .where(conditions.length > 0 ? and(...conditions) : undefined);
+    const rows = await db.select({ value: count() }).from(racePredictions);
 
     return { count: rows[0]?.value ?? 0 };
   });
@@ -119,6 +125,7 @@ export async function GET(request: Request) {
   });
 
   const stages = {
+    directCountQuery,
     countQuery,
     predictionEvaluationJoinQuery,
     modelVersionDistinctQuery,
@@ -165,6 +172,7 @@ function createDiagnosticDatabase(databaseUrl: string) {
 }
 
 type DiagnosticDatabase = ReturnType<typeof createDiagnosticDatabase>["db"];
+type DiagnosticClient = ReturnType<typeof createDiagnosticDatabase>["client"];
 
 async function selectAnalyticsRows(
   db: DiagnosticDatabase,
@@ -237,6 +245,20 @@ function buildConditions(filters: PredictionAnalyticsSearchParams): SQL[] {
 async function runDatabaseStage<T extends object>(
   operation: (db: DiagnosticDatabase) => Promise<T>,
 ): Promise<StageDiagnostic<T>> {
+  return runDisposableStage(({ db }) => operation(db));
+}
+
+async function runDirectStage<T extends object>(
+  operation: (client: DiagnosticClient) => Promise<T>,
+): Promise<StageDiagnostic<T>> {
+  return runDisposableStage(({ client }) => operation(client));
+}
+
+async function runDisposableStage<T extends object>(
+  operation: (
+    resources: ReturnType<typeof createDiagnosticDatabase>,
+  ) => Promise<T>,
+): Promise<StageDiagnostic<T>> {
   const startedAt = performance.now();
   const databaseUrl = process.env.DATABASE_URL;
 
@@ -248,10 +270,10 @@ async function runDatabaseStage<T extends object>(
     };
   }
 
-  const { client, db } = createDiagnosticDatabase(databaseUrl);
+  const resources = createDiagnosticDatabase(databaseUrl);
 
   try {
-    const result = await withTimeout(operation(db), diagnosticTimeoutMs);
+    const result = await withTimeout(operation(resources), diagnosticTimeoutMs);
 
     return {
       status: "ok",
@@ -265,9 +287,10 @@ async function runDatabaseStage<T extends object>(
       status: errorKind,
       elapsedMs: Math.round(performance.now() - startedAt),
       errorKind,
+      ...getSafeErrorMetadata(error),
     };
   } finally {
-    await client.end({ timeout: 1 }).catch(() => undefined);
+    await resources.client.end({ timeout: 1 }).catch(() => undefined);
   }
 }
 
@@ -351,6 +374,59 @@ function getErrorCode(error: unknown) {
   return undefined;
 }
 
+function getSafeErrorMetadata(error: unknown) {
+  const [topLevel, ...causes] = getErrorChain(error);
+
+  return compactMetadata({
+    errorName: getSafeProperty(topLevel, "name"),
+    topLevelCode: getSafeProperty(topLevel, "code"),
+    causeCode: getFirstSafeProperty(causes, "code"),
+    causeName: getFirstSafeProperty(causes, "name"),
+    severity: getFirstSafeProperty([topLevel, ...causes], "severity"),
+    routine: getFirstSafeProperty([topLevel, ...causes], "routine"),
+    table: getFirstSafeProperty([topLevel, ...causes], "table"),
+    column: getFirstSafeProperty([topLevel, ...causes], "column"),
+    constraint: getFirstSafeProperty([topLevel, ...causes], "constraint"),
+  });
+}
+
+function getFirstSafeProperty(
+  values: Array<object | undefined>,
+  property: string,
+) {
+  for (const value of values) {
+    const result = getSafeProperty(value, property);
+
+    if (result !== undefined) {
+      return result;
+    }
+  }
+
+  return undefined;
+}
+
+function getSafeProperty(value: object | undefined, property: string) {
+  if (!(value && property in value)) {
+    return undefined;
+  }
+
+  const candidate = Reflect.get(value, property);
+
+  return typeof candidate === "string" && /^[A-Za-z0-9_.-]{1,128}$/.test(candidate)
+    ? candidate
+    : undefined;
+}
+
+function compactMetadata<T extends Record<string, string | undefined>>(
+  metadata: T,
+) {
+  return Object.fromEntries(
+    Object.entries(metadata).filter((entry): entry is [string, string] =>
+      entry[1] !== undefined,
+    ),
+  );
+}
+
 function hasErrorName(error: unknown, expectedName: string) {
   return getErrorChain(error).some(
     current => "name" in current && current.name === expectedName,
@@ -361,7 +437,7 @@ function getErrorChain(error: unknown) {
   const chain: object[] = [];
   let current = error;
 
-  for (let depth = 0; depth < 4; depth += 1) {
+  for (let depth = 0; depth < 3; depth += 1) {
     if (typeof current !== "object" || current === null) {
       break;
     }
