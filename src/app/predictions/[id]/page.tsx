@@ -37,12 +37,16 @@ export async function generateMetadata({
     return { title: "予測履歴が見つかりません" };
   }
 
-  const detail = await getPredictionRunDetail(parsedId.data);
-  return {
-    title: detail
-      ? `予測履歴 ${formatPredictionDateTime(detail.run.startedAt)}`
-      : "予測履歴が見つかりません",
-  };
+  try {
+    const detail = await getPredictionRunDetail(parsedId.data);
+    return {
+      title: detail
+        ? `予測履歴 ${formatPredictionDateTime(detail.run.startedAt)}`
+        : "予測履歴が見つかりません",
+    };
+  } catch {
+    return { title: "予測履歴を表示できません" };
+  }
 }
 
 export default async function PredictionDetailPage({
@@ -54,7 +58,24 @@ export default async function PredictionDetailPage({
     notFound();
   }
 
-  const detail = await getPredictionRunDetail(parsedId.data);
+  let detail: Awaited<ReturnType<typeof getPredictionRunDetail>>;
+
+  try {
+    detail = await getPredictionRunDetail(parsedId.data);
+  } catch {
+    return (
+      <section>
+        <Link className="back-link" href="/predictions">
+          ← 予測履歴へ
+        </Link>
+
+        <div className="empty-state">
+          <h1>予測履歴を表示できませんでした</h1>
+          <p>データベース接続を確認して、時間をおいて再確認してください。</p>
+        </div>
+      </section>
+    );
+  }
 
   if (!detail) {
     notFound();
@@ -129,7 +150,7 @@ export default async function PredictionDetailPage({
 
       {raceGroups.length === 0 ? (
         <div className="empty-state empty-state--compact">
-          <h2>保存された予測結果はありません</h2>
+          <h2>この予測runには表示可能な予測結果がありません</h2>
           <p>dry-runの場合、race_predictionsには保存されません。</p>
         </div>
       ) : (
