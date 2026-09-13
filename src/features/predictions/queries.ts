@@ -176,41 +176,39 @@ export async function getPredictionAnalytics(
     conditions.push(isNull(predictionEvaluations.id));
   }
 
-  const [rows, modelVersions] = await Promise.all([
-    db
-      .select({
-        predictionRunId: predictionRuns.id,
-        modelVersion: predictionRuns.modelVersion,
-        raceId: racePredictions.raceId,
-        racePredictionId: racePredictions.id,
-        rankInRace: racePredictions.rankInRace,
-        rankDiff: predictionEvaluations.rankDiff,
-        isPredictedTop1: predictionEvaluations.isPredictedTop1,
-        topPredictionIsTop3: predictionEvaluations.topPredictionIsTop3,
-        actualWinnerInPredictedTop3:
-          predictionEvaluations.actualWinnerInPredictedTop3,
-        scoreComponentsJson: racePredictions.scoreComponentsJson,
-      })
-      .from(racePredictions)
-      .innerJoin(
-        predictionRuns,
-        eq(racePredictions.predictionRunId, predictionRuns.id),
-      )
-      .leftJoin(
-        predictionEvaluations,
-        eq(racePredictions.id, predictionEvaluations.racePredictionId),
-      )
-      .where(conditions.length > 0 ? and(...conditions) : undefined)
-      .orderBy(
-        asc(predictionRuns.modelVersion),
-        asc(racePredictions.raceId),
-        asc(racePredictions.rankInRace),
-      ),
-    db
-      .selectDistinct({ modelVersion: predictionRuns.modelVersion })
-      .from(predictionRuns)
-      .orderBy(asc(predictionRuns.modelVersion)),
-  ]);
+  const rows = await db
+    .select({
+      predictionRunId: predictionRuns.id,
+      modelVersion: predictionRuns.modelVersion,
+      raceId: racePredictions.raceId,
+      racePredictionId: racePredictions.id,
+      rankInRace: racePredictions.rankInRace,
+      rankDiff: predictionEvaluations.rankDiff,
+      isPredictedTop1: predictionEvaluations.isPredictedTop1,
+      topPredictionIsTop3: predictionEvaluations.topPredictionIsTop3,
+      actualWinnerInPredictedTop3:
+        predictionEvaluations.actualWinnerInPredictedTop3,
+      scoreComponentsJson: racePredictions.scoreComponentsJson,
+    })
+    .from(racePredictions)
+    .innerJoin(
+      predictionRuns,
+      eq(racePredictions.predictionRunId, predictionRuns.id),
+    )
+    .leftJoin(
+      predictionEvaluations,
+      eq(racePredictions.id, predictionEvaluations.racePredictionId),
+    )
+    .where(conditions.length > 0 ? and(...conditions) : undefined)
+    .orderBy(
+      asc(predictionRuns.modelVersion),
+      asc(racePredictions.raceId),
+      asc(racePredictions.rankInRace),
+    );
+  const modelVersions = await db
+    .selectDistinct({ modelVersion: predictionRuns.modelVersion })
+    .from(predictionRuns)
+    .orderBy(asc(predictionRuns.modelVersion));
 
   return {
     summary: calculatePredictionAnalytics(rows),
