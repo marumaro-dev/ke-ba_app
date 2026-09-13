@@ -19,6 +19,8 @@ export const metadata: Metadata = {
 
 export const dynamic = "force-dynamic";
 
+const analyticsTimeoutMs = 15_000;
+
 const evaluationStatusLabels = {
   all: "すべて",
   evaluated: "評価済み",
@@ -32,7 +34,10 @@ export default async function PredictionAnalyticsPage({
   let analytics: Awaited<ReturnType<typeof getPredictionAnalytics>>;
 
   try {
-    analytics = await getPredictionAnalytics(filters);
+    analytics = await withTimeout(
+      getPredictionAnalytics(filters),
+      analyticsTimeoutMs,
+    );
   } catch {
     return (
       <section>
@@ -384,6 +389,26 @@ function ComparisonRow({ label, value }: { label: string; value: string }) {
 function formatSignedCount(value: number) {
   const sign = value > 0 ? "+" : "";
   return `${sign}${formatPredictionCount(value)}`;
+}
+
+async function withTimeout<T>(promise: Promise<T>, timeoutMs: number) {
+  let timeout: ReturnType<typeof setTimeout> | undefined;
+
+  try {
+    return await Promise.race([
+      promise,
+      new Promise<never>((_, reject) => {
+        timeout = setTimeout(
+          () => reject(new Error("Analytics timeout")),
+          timeoutMs,
+        );
+      }),
+    ]);
+  } finally {
+    if (timeout) {
+      clearTimeout(timeout);
+    }
+  }
 }
 
 function formatSignedRateDiff(value: number | null) {
