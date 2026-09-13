@@ -38,7 +38,9 @@ export default async function PredictionAnalyticsPage({
       getPredictionAnalytics(filters),
       analyticsTimeoutMs,
     );
-  } catch {
+  } catch (error) {
+    logAnalyticsFallback(error);
+
     return (
       <section>
         <div className="page-heading">
@@ -391,6 +393,21 @@ function formatSignedCount(value: number) {
   return `${sign}${formatPredictionCount(value)}`;
 }
 
+function logAnalyticsFallback(error: unknown) {
+  const details = error && typeof error === "object" ? error : {};
+  const cause =
+    "cause" in details && details.cause && typeof details.cause === "object"
+      ? details.cause
+      : {};
+
+  console.error("Prediction analytics fallback", {
+    errorName: "name" in details ? details.name : "unknown",
+    errorCode: "code" in details ? details.code : null,
+    causeName: "name" in cause ? cause.name : null,
+    causeCode: "code" in cause ? cause.code : null,
+  });
+}
+
 async function withTimeout<T>(promise: Promise<T>, timeoutMs: number) {
   let timeout: ReturnType<typeof setTimeout> | undefined;
 
@@ -399,7 +416,12 @@ async function withTimeout<T>(promise: Promise<T>, timeoutMs: number) {
       promise,
       new Promise<never>((_, reject) => {
         timeout = setTimeout(
-          () => reject(new Error("Analytics timeout")),
+          () =>
+            reject(
+              Object.assign(new Error("Analytics timeout"), {
+                code: "ANALYTICS_TIMEOUT",
+              }),
+            ),
           timeoutMs,
         );
       }),

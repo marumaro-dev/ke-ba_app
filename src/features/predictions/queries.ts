@@ -1,4 +1,6 @@
 import { and, asc, count, desc, eq, gte, isNotNull, isNull, lt } from "drizzle-orm";
+import { drizzle } from "drizzle-orm/postgres-js";
+import postgres from "postgres";
 
 import { getDb } from "@/db";
 import {
@@ -10,6 +12,7 @@ import {
   racePredictions,
   races,
 } from "@/db/schema";
+import { getDatabaseEnv } from "@/lib/env";
 import {
   predictionRunListPageSize,
   type PredictionAnalyticsSearchParams,
@@ -154,7 +157,14 @@ export async function getPredictionRunDetail(runId: string) {
 export async function getPredictionAnalytics(
   params: PredictionAnalyticsSearchParams,
 ) {
-  const db = getDb();
+  const { DATABASE_URL } = getDatabaseEnv();
+  const client = postgres(DATABASE_URL, {
+    max: 1,
+    prepare: false,
+    connect_timeout: 10,
+    idle_timeout: 20,
+  });
+  const db = drizzle(client);
   const conditions = [];
 
   if (params.modelVersion !== "all") {
@@ -176,42 +186,46 @@ export async function getPredictionAnalytics(
     conditions.push(isNull(predictionEvaluations.id));
   }
 
-  const rows = await db
-    .select({
-      predictionRunId: predictionRuns.id,
-      modelVersion: predictionRuns.modelVersion,
-      raceId: racePredictions.raceId,
-      racePredictionId: racePredictions.id,
-      rankInRace: racePredictions.rankInRace,
-      rankDiff: predictionEvaluations.rankDiff,
-      isPredictedTop1: predictionEvaluations.isPredictedTop1,
-      topPredictionIsTop3: predictionEvaluations.topPredictionIsTop3,
-      actualWinnerInPredictedTop3:
-        predictionEvaluations.actualWinnerInPredictedTop3,
-      scoreComponentsJson: racePredictions.scoreComponentsJson,
-    })
-    .from(racePredictions)
-    .innerJoin(
-      predictionRuns,
-      eq(racePredictions.predictionRunId, predictionRuns.id),
-    )
-    .leftJoin(
-      predictionEvaluations,
-      eq(racePredictions.id, predictionEvaluations.racePredictionId),
-    )
-    .where(conditions.length > 0 ? and(...conditions) : undefined)
-    .orderBy(
-      asc(predictionRuns.modelVersion),
-      asc(racePredictions.raceId),
-      asc(racePredictions.rankInRace),
-    );
-  const modelVersions = await db
-    .selectDistinct({ modelVersion: predictionRuns.modelVersion })
-    .from(predictionRuns)
-    .orderBy(asc(predictionRuns.modelVersion));
+  try {
+    const rows = await db
+      .select({
+        predictionRunId: predictionRuns.id,
+        modelVersion: predictionRuns.modelVersion,
+        raceId: racePredictions.raceId,
+        racePredictionId: racePredictions.id,
+        rankInRace: racePredictions.rankInRace,
+        rankDiff: predictionEvaluations.rankDiff,
+        isPredictedTop1: predictionEvaluations.isPredictedTop1,
+        topPredictionIsTop3: predictionEvaluations.topPredictionIsTop3,
+        actualWinnerInPredictedTop3:
+          predictionEvaluations.actualWinnerInPredictedTop3,
+        scoreComponentsJson: racePredictions.scoreComponentsJson,
+      })
+      .from(racePredictions)
+      .innerJoin(
+        predictionRuns,
+        eq(racePredictions.predictionRunId, predictionRuns.id),
+      )
+      .leftJoin(
+        predictionEvaluations,
+        eq(racePredictions.id, predictionEvaluations.racePredictionId),
+      )
+      .where(conditions.length > 0 ? and(...conditions) : undefined)
+      .orderBy(
+        asc(predictionRuns.modelVersion),
+        asc(racePredictions.raceId),
+        asc(racePredictions.rankInRace),
+      );
+    const modelVersions = await db
+      .selectDistinct({ modelVersion: predictionRuns.modelVersion })
+      .from(predictionRuns)
+      .orderBy(asc(predictionRuns.modelVersion));
 
-  return {
-    summary: calculatePredictionAnalytics(rows),
-    modelVersions: modelVersions.map(row => row.modelVersion),
-  };
+    return {
+      summary: calculatePredictionAnalytics(rows),
+      modelVersions: modelVersions.map(row => row.modelVersion),
+    };
+  } finally {
+    await client.end({ timeout: 2 });
+  }
 }
