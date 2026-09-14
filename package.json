@@ -20,6 +20,7 @@
     "predictions:generate:dry-run": "tsx src/db/generate-predictions.ts --dry-run",
     "predictions:evaluate": "tsx src/db/evaluate-predictions.ts",
     "predictions:evaluate:dry-run": "tsx src/db/evaluate-predictions.ts --dry-run",
+    "target:convert:results": "tsx src/target-results/cli.ts",
     "db:import:csv": "tsx src/db/import-csv.ts",
     "db:import:csv:dry-run": "tsx src/db/import-csv.ts --dry-run"
   },
