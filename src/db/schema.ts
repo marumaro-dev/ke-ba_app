@@ -15,6 +15,9 @@ import {
   uuid,
 } from "drizzle-orm/pg-core";
 import { sql } from "drizzle-orm";
+import type {
+  PreRaceEntryRaw as PreRaceEntryRawFields,
+} from "../pre-race-snapshots/types";
 
 const timestampColumns = {
   availableAt: timestamp("available_at", {
@@ -105,6 +108,11 @@ export const predictionRunStatusEnum = pgEnum("prediction_run_status", [
 ]);
 
 export const predictionTypeEnum = pgEnum("prediction_type", ["rule_based"]);
+
+export const observationTimeStatusEnum = pgEnum("observation_time_status", [
+  "known",
+  "unknown",
+]);
 
 export const races = pgTable(
   "races",
@@ -633,6 +641,169 @@ export const predictionEvaluations = pgTable(
   ],
 );
 
+export const preRaceSnapshots = pgTable(
+  "pre_race_snapshots",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    providerCode: text("provider_code").notNull(),
+    raceId: uuid("race_id").references(() => races.id, {
+      onDelete: "set null",
+    }),
+    sourceRaceKey: text("source_race_key").notNull(),
+    raceDate: date("race_date", { mode: "string" }).notNull(),
+    venue: text("venue").notNull(),
+    raceNumber: smallint("race_number").notNull(),
+    scheduledStartAt: timestamp("scheduled_start_at", {
+      withTimezone: true,
+      mode: "date",
+    }).notNull(),
+    surface: text("surface").notNull(),
+    distanceMeters: integer("distance_meters").notNull(),
+    declaredEntries: integer("declared_entries").notNull(),
+    observedAt: timestamp("observed_at", {
+      withTimezone: true,
+      mode: "date",
+    }),
+    observationTimeStatus: observationTimeStatusEnum(
+      "observation_time_status",
+    ).notNull(),
+    schemaVersion: text("schema_version").notNull(),
+    sourceFileName: text("source_file_name"),
+    sourceChecksum: text("source_checksum"),
+    snapshotFingerprint: text("snapshot_fingerprint").notNull(),
+    isFeatureEligible: boolean("is_feature_eligible").notNull(),
+    eligibilityReason: text("eligibility_reason"),
+    createdAt: timestamp("created_at", {
+      withTimezone: true,
+      mode: "date",
+    })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => [
+    unique("pre_race_snapshots_fingerprint_unique").on(
+      table.snapshotFingerprint,
+    ),
+    unique("pre_race_snapshots_source_observed_version_unique").on(
+      table.providerCode,
+      table.sourceRaceKey,
+      table.observedAt,
+      table.schemaVersion,
+    ),
+    index("pre_race_snapshots_race_observed_idx").on(
+      table.raceId,
+      table.observedAt,
+    ),
+    check(
+      "pre_race_snapshots_race_number_check",
+      sql`${table.raceNumber} > 0`,
+    ),
+    check(
+      "pre_race_snapshots_distance_meters_check",
+      sql`${table.distanceMeters} > 0`,
+    ),
+    check(
+      "pre_race_snapshots_declared_entries_check",
+      sql`${table.declaredEntries} > 0`,
+    ),
+    check(
+      "pre_race_snapshots_observation_time_check",
+      sql`(${table.observationTimeStatus} = 'known' and ${table.observedAt} is not null) or (${table.observationTimeStatus} = 'unknown' and ${table.observedAt} is null)`,
+    ),
+    check(
+      "pre_race_snapshots_known_before_start_check",
+      sql`${table.observationTimeStatus} <> 'known' or (${table.observedAt} is not null and ${table.observedAt} < ${table.scheduledStartAt})`,
+    ),
+    check(
+      "pre_race_snapshots_feature_eligible_check",
+      sql`not ${table.isFeatureEligible} or (${table.observationTimeStatus} = 'known' and ${table.observedAt} is not null and ${table.observedAt} < ${table.scheduledStartAt})`,
+    ),
+    check(
+      "pre_race_snapshots_eligibility_reason_check",
+      sql`(${table.isFeatureEligible} and ${table.eligibilityReason} is null) or (not ${table.isFeatureEligible} and ${table.eligibilityReason} is not null)`,
+    ),
+    check(
+      "pre_race_snapshots_fingerprint_check",
+      sql`${table.snapshotFingerprint} ~ '^[0-9a-f]{64}$'`,
+    ),
+  ],
+);
+
+export const preRaceEntrySnapshots = pgTable(
+  "pre_race_entry_snapshots",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    preRaceSnapshotId: uuid("pre_race_snapshot_id")
+      .notNull()
+      .references(() => preRaceSnapshots.id, { onDelete: "cascade" }),
+    raceEntryId: uuid("race_entry_id").references(() => raceEntries.id, {
+      onDelete: "set null",
+    }),
+    horseId: uuid("horse_id").references(() => horses.id, {
+      onDelete: "set null",
+    }),
+    jockeyId: uuid("jockey_id").references(() => jockeys.id, {
+      onDelete: "set null",
+    }),
+    trainerId: uuid("trainer_id").references(() => trainers.id, {
+      onDelete: "set null",
+    }),
+    sourceEntryKey: text("source_entry_key").notNull(),
+    frameNumber: smallint("frame_number").notNull(),
+    horseNumber: smallint("horse_number").notNull(),
+    horseNameRaw: text("horse_name_raw").notNull(),
+    jockeyNameRaw: text("jockey_name_raw").notNull(),
+    trainerNameRaw: text("trainer_name_raw"),
+    sex: horseSexEnum("sex").notNull(),
+    age: smallint("age").notNull(),
+    assignedWeight: numeric("assigned_weight", {
+      precision: 4,
+      scale: 1,
+    }).notNull(),
+    interval: integer("interval"),
+    zi: numeric("zi", { precision: 10, scale: 3 }),
+    rawFieldsJson: jsonb("raw_fields_json")
+      .$type<PreRaceEntryRawFields>()
+      .notNull(),
+    createdAt: timestamp("created_at", {
+      withTimezone: true,
+      mode: "date",
+    })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => [
+    unique("pre_race_entry_snapshots_snapshot_horse_number_unique").on(
+      table.preRaceSnapshotId,
+      table.horseNumber,
+    ),
+    index("pre_race_entry_snapshots_race_entry_idx").on(table.raceEntryId),
+    index("pre_race_entry_snapshots_horse_idx").on(table.horseId),
+    index("pre_race_entry_snapshots_jockey_idx").on(table.jockeyId),
+    check(
+      "pre_race_entry_snapshots_frame_number_check",
+      sql`${table.frameNumber} > 0`,
+    ),
+    check(
+      "pre_race_entry_snapshots_horse_number_check",
+      sql`${table.horseNumber} > 0`,
+    ),
+    check("pre_race_entry_snapshots_age_check", sql`${table.age} > 0`),
+    check(
+      "pre_race_entry_snapshots_assigned_weight_check",
+      sql`${table.assignedWeight} > 0`,
+    ),
+    check(
+      "pre_race_entry_snapshots_interval_check",
+      sql`${table.interval} is null or ${table.interval} >= 0`,
+    ),
+    check(
+      "pre_race_entry_snapshots_raw_fields_json_check",
+      sql`jsonb_typeof(${table.rawFieldsJson}) = 'object'`,
+    ),
+  ],
+);
+
 export type Race = typeof races.$inferSelect;
 export type Horse = typeof horses.$inferSelect;
 export type Jockey = typeof jockeys.$inferSelect;
@@ -649,3 +820,5 @@ export type PredictionRun = typeof predictionRuns.$inferSelect;
 export type RacePrediction = typeof racePredictions.$inferSelect;
 export type PredictionEvaluation =
   typeof predictionEvaluations.$inferSelect;
+export type PreRaceSnapshot = typeof preRaceSnapshots.$inferSelect;
+export type PreRaceEntrySnapshot = typeof preRaceEntrySnapshots.$inferSelect;
