@@ -68,7 +68,7 @@ const HEADERS = {
   ],
 } as const;
 
-const RESULT_ROW = /^\s*(\d+|止|消|失)\s+(\d+)\s+(\d+)\s+(.+?)\s+(牡|牝|セ|騙)\s*(\d+)\s+(.+?)\s+(\d+(?:\.\d+)?[▲△◇☆]?)\s+(\d+\.\d{2}\.\d|------)\s+(\d+\.\d|----)\s+(\d+|--)\s+(\d+|---)\s+\(([^)]*)\)(.+?)\s*$/;
+const RESULT_ROW = /^\s*(\d+|止|消|失|外)\s+(\d+)\s+(\d+)\s+(.+?)\s+(牡|牝|セ|騙)\s*(\d+)\s+(.+?)\s+(\d+(?:\.\d+)?[▲△◇☆]?)\s+(\d+\.\d{2}\.\d|------)\s+(\d+\.\d|----)\s+(\d+|--)\s+(\d+|---)\s+\(([^)]*)\)(.+?)\s*$/;
 
 export async function convertTargetResults(options: ConvertTargetResultsOptions) {
   validateOptions(options);
@@ -208,20 +208,22 @@ function buildRows(text: string, options: ConvertTargetResultsOptions) {
         assigned_weight: parsed.assignedWeight,
         body_weight: parsed.bodyWeight,
         body_weight_diff: "",
-        status: parsed.finishStatus === "scratched" ? "scratched" : "running",
+        status: parsed.isExcluded ? "excluded" : parsed.finishStatus === "scratched" ? "scratched" : "running",
       });
-      raceResults.push({
-        ...common,
-        source_result_id: `${sourceEntryId}_result`,
-        source_entry_id: sourceEntryId,
-        finish_position: parsed.finishPosition,
-        finish_status: parsed.finishStatus,
-        finish_time_milliseconds: parsed.finishTimeMilliseconds,
-        margin: "",
-        final_odds: "",
-        popularity: parsed.popularity,
-        status: "confirmed",
-      });
+      if (parsed.finishStatus !== null) {
+        raceResults.push({
+          ...common,
+          source_result_id: `${sourceEntryId}_result`,
+          source_entry_id: sourceEntryId,
+          finish_position: parsed.finishPosition,
+          finish_status: parsed.finishStatus,
+          finish_time_milliseconds: parsed.finishTimeMilliseconds,
+          margin: "",
+          final_odds: "",
+          popularity: parsed.popularity,
+          status: "confirmed",
+        });
+      }
     }
   }
 
@@ -239,10 +241,13 @@ function parseResultLine(line: string) {
   const match = line.match(RESULT_ROW);
   if (!match) throw new Error("A result row does not match the supported TARGET layout.");
   const finish = match[1];
-  const finishStatus = /^\d+$/.test(finish)
+  const isExcluded = finish === "外";
+  const finishStatus = isExcluded
+    ? null
+    : /^\d+$/.test(finish)
     ? "finished"
     : ({ 止: "did_not_finish", 消: "scratched", 失: "disqualified" } as const)[finish as "止" | "消" | "失"];
-  if (!finishStatus) throw new Error(`Unknown finish status: ${finish}`);
+  if (!isExcluded && !finishStatus) throw new Error(`Unknown finish status: ${finish}`);
 
   return {
     frameNumber: Number(match[2]),
@@ -253,6 +258,7 @@ function parseResultLine(line: string) {
     assignedWeight: match[8].replace(/[▲△◇☆]/g, ""),
     finishPosition: /^\d+$/.test(finish) ? finish : "",
     finishStatus,
+    isExcluded,
     finishTimeMilliseconds: parseFinishTime(match[9]),
     popularity: match[11] === "--" ? "" : match[11],
     bodyWeight: match[12] === "---" ? "" : match[12],
@@ -370,7 +376,7 @@ function collectResultLines(lines: string[], start: number, end: number) {
       continue;
     }
     if (!line.trim()) continue;
-    if (/^\s*(?:\d+|止|消|失)\s+\d+\s+\d+\s+/.test(line)) {
+    if (/^\s*(?:\d+|止|消|失|外)\s+\d+\s+\d+\s+/.test(line)) {
       resultLines.push(line);
       started = true;
       continue;

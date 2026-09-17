@@ -114,6 +114,30 @@ describe("convertTargetResults", () => {
     // Start-time parsing is intentionally deferred; all races use the documented fallback for now.
     expect(new Set(raceRows.map((row) => row.values.scheduled_start_at)).size).toBe(1);
   });
+
+  it("keeps an excluded entry distinct from a scratched entry without inventing a result", async () => {
+    const temporaryDirectory = await mkdtemp(path.join(tmpdir(), "target-results-"));
+    temporaryDirectories.push(temporaryDirectory);
+    const outputDir = path.join(temporaryDirectory, "output");
+
+    const result = await convertTargetResults({
+      input: path.join(process.cwd(), "src/target-results/fixtures/excluded.synthetic.txt"),
+      outputDir,
+      providerCode: "jra_van",
+      raceDate: "2026-06-14",
+      venue: "架空競馬場",
+      venueCode: "synthetic",
+      asOfAt: "2026-06-14T18:00:00+09:00",
+    });
+
+    expect(result.rowCounts.raceEntries).toBe(2);
+    expect(result.rowCounts.raceResults).toBe(1);
+    const entryRows = await readRows(outputDir, "race_entries.sample.csv");
+    const resultRows = await readRows(outputDir, "race_results.sample.csv");
+    expect(entryRows.map((row) => row.values.status)).toEqual(["running", "excluded"]);
+    expect(resultRows.map((row) => row.values.source_entry_id)).toEqual([entryRows[0].values.source_entry_id]);
+    expect(resultRows[0].values.finish_status).toBe("finished");
+  });
 });
 
 function expectReferentialIntegrity(rows: {
