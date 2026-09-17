@@ -16,7 +16,8 @@ const dateString = z.string().regex(/^\d{4}-\d{2}-\d{2}$/);
 const dateTimeString = z
   .string()
   .trim()
-  .refine((value) => !Number.isNaN(Date.parse(value)), {
+  .refine((value) => /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(?::\d{2}(?:\.\d+)?)?(?:Z|[+-]\d{2}:\d{2})$/i.test(value)
+    && !Number.isNaN(Date.parse(value)), {
     message: "Expected ISO 8601 datetime with timezone",
   })
   .transform((value) => new Date(value));
@@ -60,10 +61,28 @@ const optionalPositiveDecimalString = z
 const commonColumns = {
   id: optionalUuid,
   provider_code: requiredString,
-  available_at: dateTimeString,
-  observed_at: dateTimeString,
+  available_at: optionalDateTimeString,
+  available_at_status: z.enum(["known", "unknown"]),
+  observed_at: optionalDateTimeString,
+  observed_at_status: z.enum(["known", "unknown"]),
   imported_at: optionalDateTimeString,
 };
+
+function validateTimeStatus(value: {
+  available_at: Date | null;
+  available_at_status: "known" | "unknown";
+  observed_at: Date | null;
+  observed_at_status: "known" | "unknown";
+}, context: z.RefinementCtx) {
+  for (const prefix of ["available", "observed"] as const) {
+    const time = value[`${prefix}_at`];
+    const status = value[`${prefix}_at_status`];
+    if ((status === "known") !== (time !== null)) {
+      context.addIssue({ code: "custom", path: [`${prefix}_at`],
+        message: `${prefix}_at and ${prefix}_at_status disagree` });
+    }
+  }
+}
 
 export const raceCsvSchema = z.object({
   ...commonColumns,
@@ -78,7 +97,7 @@ export const raceCsvSchema = z.object({
   weather: optionalString,
   track_condition: optionalString,
   status: z.enum(["scheduled", "confirmed", "cancelled"]),
-});
+}).superRefine(validateTimeStatus);
 
 export const horseCsvSchema = z.object({
   ...commonColumns,
@@ -95,20 +114,20 @@ export const horseCsvSchema = z.object({
     .transform((value) => (value === "" ? null : value))
     .pipe(z.enum(["male", "female", "gelding"]).nullable()),
   color: optionalString,
-});
+}).superRefine(validateTimeStatus);
 
 export const jockeyCsvSchema = z.object({
   ...commonColumns,
   source_jockey_id: requiredString,
   name: requiredString,
-});
+}).superRefine(validateTimeStatus);
 
 export const trainerCsvSchema = z.object({
   ...commonColumns,
   source_trainer_id: requiredString,
   name: requiredString,
   affiliation: optionalString,
-});
+}).superRefine(validateTimeStatus);
 
 export const raceEntryCsvSchema = z.object({
   ...commonColumns,
@@ -123,7 +142,7 @@ export const raceEntryCsvSchema = z.object({
   body_weight: optionalPositiveInteger,
   body_weight_diff: optionalInteger,
   status: z.enum(["entered", "running", "scratched", "excluded"]),
-});
+}).superRefine(validateTimeStatus);
 
 export const raceResultCsvSchema = z.object({
   ...commonColumns,
@@ -141,7 +160,7 @@ export const raceResultCsvSchema = z.object({
   final_odds: optionalPositiveDecimalString,
   popularity: optionalPositiveInteger,
   status: z.enum(["preliminary", "confirmed", "corrected"]),
-});
+}).superRefine(validateTimeStatus);
 
 export type RaceCsvRecord = z.infer<typeof raceCsvSchema>;
 export type HorseCsvRecord = z.infer<typeof horseCsvSchema>;

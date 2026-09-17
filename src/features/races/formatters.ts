@@ -9,8 +9,8 @@ const dateFormatter = new Intl.DateTimeFormat("ja-JP", {
   timeZone: "Asia/Tokyo",
 });
 
-export function formatDateTime(value: Date) {
-  return dateTimeFormatter.format(value);
+export function formatDateTime(value: Date | null) {
+  return value === null ? "不明" : dateTimeFormatter.format(value);
 }
 
 export function formatDate(value: string) {

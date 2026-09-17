@@ -18,6 +18,7 @@ import {
   getRuleBasedScoringConfig,
   type RuleBasedScoringConfig,
 } from "./scoring-config";
+import { knownSourceAt } from "../source-time-safety";
 
 type Database = ReturnType<typeof drizzle<Record<string, never>, postgres.Sql>>;
 
@@ -213,8 +214,8 @@ async function getPredictionTargets(db: Database, asOfAt: Date) {
     .innerJoin(races, eq(raceEntries.raceId, races.id))
     .where(
       and(
-        lte(races.availableAt, asOfAt),
-        lte(raceEntries.availableAt, asOfAt),
+        knownSourceAt(races, asOfAt),
+        knownSourceAt(raceEntries, asOfAt),
       ),
     )
     .orderBy(asc(raceEntries.raceId), asc(raceEntries.horseNumber));

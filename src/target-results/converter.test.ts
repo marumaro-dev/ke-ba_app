@@ -13,6 +13,38 @@ afterEach(async () => {
 });
 
 describe("convertTargetResults", () => {
+  it.each([
+    ["unknown", undefined, undefined, "", "unknown", "", "unknown"],
+    ["available only", "2026-06-14T10:00:00+09:00", undefined, "2026-06-14T01:00:00.000Z", "known", "", "unknown"],
+    ["observed only", undefined, "2026-06-14T11:00:00+09:00", "", "unknown", "2026-06-14T02:00:00.000Z", "known"],
+    ["both known", "2026-06-14T10:00:00+09:00", "2026-06-14T11:00:00+09:00", "2026-06-14T01:00:00.000Z", "known", "2026-06-14T02:00:00.000Z", "known"],
+  ] as const)("keeps %s source times independent", async (_label, availableAt, observedAt,
+    available, availableStatus, observed, observedStatus) => {
+    const temporaryDirectory = await mkdtemp(path.join(tmpdir(), "target-results-"));
+    temporaryDirectories.push(temporaryDirectory);
+    const result = await convertTargetResults({
+      input: path.join(process.cwd(), "src/target-results/fixtures/single-race.synthetic.txt"),
+      outputDir: path.join(temporaryDirectory, "output"), providerCode: "jra_van",
+      raceDate: "2026-06-14", venue: "架空競馬場", venueCode: "synthetic",
+      availableAt, observedAt,
+    });
+    for (const file of Object.values(result.files)) {
+      const rows = await readRows(result.outputDir, file);
+      expect(rows.every((row) => row.values.available_at === available
+        && row.values.available_at_status === availableStatus
+        && row.values.observed_at === observed
+        && row.values.observed_at_status === observedStatus)).toBe(true);
+    }
+  });
+
+  it("rejects the legacy single as-of timestamp instead of copying it twice", async () => {
+    await expect(convertTargetResults({
+      input: "not-read.txt", outputDir: "not-written", providerCode: "jra_van",
+      raceDate: "2026-06-14", venue: "架空競馬場", venueCode: "synthetic",
+      asOfAt: "2026-06-14T18:00:00+09:00",
+    })).rejects.toThrow("as-of-at is unsafe");
+  });
+
   it("converts one synthetic race into six referentially consistent CSV files", async () => {
     const temporaryDirectory = await mkdtemp(path.join(tmpdir(), "target-results-"));
     temporaryDirectories.push(temporaryDirectory);
@@ -25,7 +57,8 @@ describe("convertTargetResults", () => {
       raceDate: "2026-06-14",
       venue: "架空競馬場",
       venueCode: "synthetic",
-      asOfAt: "2026-06-14T18:00:00+09:00",
+      availableAt: "2026-06-14T18:00:00+09:00",
+      observedAt: "2026-06-14T18:00:00+09:00",
     });
 
     expect(result.rowCounts).toEqual({
@@ -82,7 +115,8 @@ describe("convertTargetResults", () => {
       raceDate: "2026-06-14",
       venue: "架空競馬場",
       venueCode: "synthetic",
-      asOfAt: "2026-06-14T18:00:00+09:00",
+      availableAt: "2026-06-14T18:00:00+09:00",
+      observedAt: "2026-06-14T18:00:00+09:00",
     });
 
     expect(result.rowCounts.races).toBe(1);
@@ -112,7 +146,8 @@ describe("convertTargetResults", () => {
       raceDate: "2026-06-14",
       venue: "架空競馬場",
       venueCode: "synthetic",
-      asOfAt: "2026-06-14T18:00:00+09:00",
+      availableAt: "2026-06-14T18:00:00+09:00",
+      observedAt: "2026-06-14T18:00:00+09:00",
     })).rejects.toThrow(message);
   });
 
@@ -128,7 +163,8 @@ describe("convertTargetResults", () => {
       raceDate: "2026-06-14",
       venue: "架空競馬場",
       venueCode: "synthetic",
-      asOfAt: "2026-06-14T18:00:00+09:00",
+      availableAt: "2026-06-14T18:00:00+09:00",
+      observedAt: "2026-06-14T18:00:00+09:00",
     });
 
     expect(result.rowCounts).toEqual({
@@ -173,7 +209,8 @@ describe("convertTargetResults", () => {
       raceDate: "2026-06-14",
       venue: "架空競馬場",
       venueCode: "synthetic",
-      asOfAt: "2026-06-14T18:00:00+09:00",
+      availableAt: "2026-06-14T18:00:00+09:00",
+      observedAt: "2026-06-14T18:00:00+09:00",
     });
 
     expect(result.rowCounts.raceEntries).toBe(2);

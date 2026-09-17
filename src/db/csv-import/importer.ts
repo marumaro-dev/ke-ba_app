@@ -42,6 +42,17 @@ type ImportOptions = {
   dryRun: boolean;
 };
 
+/** Preserve independent source-time evidence; never synthesize a timestamp. */
+export function toImportTimeColumns(record: Pick<RaceCsvRecord,
+  "available_at" | "available_at_status" | "observed_at" | "observed_at_status">) {
+  return {
+    availableAt: record.available_at,
+    availableAtStatus: record.available_at_status,
+    observedAt: record.observed_at,
+    observedAtStatus: record.observed_at_status,
+  };
+}
+
 type ImportSummaryItem = {
   file: string;
   entityType: string;
@@ -260,8 +271,7 @@ export async function importCsv(options: ImportOptions) {
               weather: race.weather,
               trackCondition: race.track_condition,
               status: race.status,
-              availableAt: race.available_at,
-              observedAt: race.observed_at,
+              ...toImportTimeColumns(race),
               importedAt: race.imported_at ?? new Date(),
               updatedAt: new Date(),
             })
@@ -275,8 +285,7 @@ export async function importCsv(options: ImportOptions) {
                 weather: race.weather,
                 trackCondition: race.track_condition,
                 status: race.status,
-                availableAt: race.available_at,
-                observedAt: race.observed_at,
+                ...toImportTimeColumns(race),
                 importedAt: race.imported_at ?? new Date(),
                 updatedAt: new Date(),
               },
@@ -306,8 +315,7 @@ export async function importCsv(options: ImportOptions) {
               birthDate: horse.birth_date,
               sex: horse.sex,
               color: horse.color,
-              availableAt: horse.available_at,
-              observedAt: horse.observed_at,
+              ...toImportTimeColumns(horse),
               importedAt: horse.imported_at ?? new Date(),
               updatedAt: new Date(),
             })
@@ -318,8 +326,7 @@ export async function importCsv(options: ImportOptions) {
                 birthDate: horse.birth_date,
                 sex: horse.sex,
                 color: horse.color,
-                availableAt: horse.available_at,
-                observedAt: horse.observed_at,
+                ...toImportTimeColumns(horse),
                 importedAt: horse.imported_at ?? new Date(),
                 updatedAt: new Date(),
               },
@@ -340,8 +347,7 @@ export async function importCsv(options: ImportOptions) {
             .values({
               id: jockey.internalId,
               name: jockey.name,
-              availableAt: jockey.available_at,
-              observedAt: jockey.observed_at,
+              ...toImportTimeColumns(jockey),
               importedAt: jockey.imported_at ?? new Date(),
               updatedAt: new Date(),
             })
@@ -349,8 +355,7 @@ export async function importCsv(options: ImportOptions) {
               target: jockeys.id,
               set: {
                 name: jockey.name,
-                availableAt: jockey.available_at,
-                observedAt: jockey.observed_at,
+                ...toImportTimeColumns(jockey),
                 importedAt: jockey.imported_at ?? new Date(),
                 updatedAt: new Date(),
               },
@@ -372,8 +377,7 @@ export async function importCsv(options: ImportOptions) {
               id: trainer.internalId,
               name: trainer.name,
               affiliation: trainer.affiliation,
-              availableAt: trainer.available_at,
-              observedAt: trainer.observed_at,
+              ...toImportTimeColumns(trainer),
               importedAt: trainer.imported_at ?? new Date(),
               updatedAt: new Date(),
             })
@@ -382,8 +386,7 @@ export async function importCsv(options: ImportOptions) {
               set: {
                 name: trainer.name,
                 affiliation: trainer.affiliation,
-                availableAt: trainer.available_at,
-                observedAt: trainer.observed_at,
+                ...toImportTimeColumns(trainer),
                 importedAt: trainer.imported_at ?? new Date(),
                 updatedAt: new Date(),
               },
@@ -422,8 +425,7 @@ export async function importCsv(options: ImportOptions) {
               bodyWeight: entry.body_weight,
               bodyWeightDiff: entry.body_weight_diff,
               status: entry.status,
-              availableAt: entry.available_at,
-              observedAt: entry.observed_at,
+              ...toImportTimeColumns(entry),
               importedAt: entry.imported_at ?? new Date(),
               updatedAt: new Date(),
             })
@@ -438,8 +440,7 @@ export async function importCsv(options: ImportOptions) {
                 bodyWeight: entry.body_weight,
                 bodyWeightDiff: entry.body_weight_diff,
                 status: entry.status,
-                availableAt: entry.available_at,
-                observedAt: entry.observed_at,
+                ...toImportTimeColumns(entry),
                 importedAt: entry.imported_at ?? new Date(),
                 updatedAt: new Date(),
               },
@@ -477,8 +478,7 @@ export async function importCsv(options: ImportOptions) {
               finalOdds: result.final_odds,
               popularity: result.popularity,
               status: result.status,
-              availableAt: result.available_at,
-              observedAt: result.observed_at,
+              ...toImportTimeColumns(result),
               importedAt: result.imported_at ?? new Date(),
               updatedAt: new Date(),
             })
@@ -492,8 +492,7 @@ export async function importCsv(options: ImportOptions) {
                 finalOdds: result.final_odds,
                 popularity: result.popularity,
                 status: result.status,
-                availableAt: result.available_at,
-                observedAt: result.observed_at,
+                ...toImportTimeColumns(result),
                 importedAt: result.imported_at ?? new Date(),
                 updatedAt: new Date(),
               },

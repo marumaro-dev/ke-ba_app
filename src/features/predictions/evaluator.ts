@@ -124,6 +124,10 @@ async function getPredictionsWithResults(
   const conditions = predictionRunId
     ? [eq(racePredictions.predictionRunId, predictionRunId)]
     : [eq(predictionRuns.status, "succeeded")];
+  conditions.push(
+    eq(raceResults.availableAtStatus, "known"),
+    eq(raceResults.observedAtStatus, "known"),
+  );
   const rows = await db
     .select({
       predictionId: racePredictions.id,
@@ -149,5 +153,9 @@ async function getPredictionsWithResults(
       asc(racePredictions.rankInRace),
     );
 
-  return rows satisfies PredictionWithResultForEvaluation[];
+  return rows.map((row) => ({
+    ...row,
+    // The DB time-status CHECK guarantees non-null for known timestamps.
+    resultAvailableAt: row.resultAvailableAt!,
+  })) satisfies PredictionWithResultForEvaluation[];
 }

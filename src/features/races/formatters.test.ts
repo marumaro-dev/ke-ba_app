@@ -5,9 +5,13 @@ import {
   formatFinishPosition,
   formatFinishTime,
   formatRaceCountLabel,
+  formatDateTime,
 } from "./formatters";
 
 describe("race formatters", () => {
+  it("renders an unknown observation time without throwing", () => {
+    expect(formatDateTime(null)).toBe("不明");
+  });
   it("formats finish time in minutes and seconds", () => {
     expect(formatFinishTime(93400)).toBe("1:33.4");
     expect(formatFinishTime(null)).toBe("—");

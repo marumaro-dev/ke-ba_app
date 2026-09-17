@@ -19,7 +19,10 @@ export type ConvertTargetResultsOptions = {
   raceDate: string;
   venue: string;
   venueCode: string;
-  asOfAt: string;
+  availableAt?: string;
+  observedAt?: string;
+  /** Deprecated: one timestamp cannot establish two independent facts. */
+  asOfAt?: string;
   entriesFile?: string;
   overwrite?: boolean;
 };
@@ -42,31 +45,31 @@ const HEADERS = {
     "id", "provider_code", "source_race_id", "race_date", "venue",
     "race_number", "name", "scheduled_start_at", "surface",
     "distance_meters", "weather", "track_condition", "status",
-    "available_at", "observed_at", "imported_at",
+    "available_at", "available_at_status", "observed_at", "observed_at_status", "imported_at",
   ],
   horses: [
     "id", "provider_code", "source_horse_id", "name", "birth_date", "sex",
-    "color", "available_at", "observed_at", "imported_at",
+    "color", "available_at", "available_at_status", "observed_at", "observed_at_status", "imported_at",
   ],
   jockeys: [
     "id", "provider_code", "source_jockey_id", "name", "available_at",
-    "observed_at", "imported_at",
+    "available_at_status", "observed_at", "observed_at_status", "imported_at",
   ],
   trainers: [
     "id", "provider_code", "source_trainer_id", "name", "affiliation",
-    "available_at", "observed_at", "imported_at",
+    "available_at", "available_at_status", "observed_at", "observed_at_status", "imported_at",
   ],
   raceEntries: [
     "id", "provider_code", "source_entry_id", "source_race_id",
     "source_horse_id", "source_jockey_id", "source_trainer_id", "frame_number",
     "horse_number", "assigned_weight", "body_weight", "body_weight_diff",
-    "status", "available_at", "observed_at", "imported_at",
+    "status", "available_at", "available_at_status", "observed_at", "observed_at_status", "imported_at",
   ],
   raceResults: [
     "id", "provider_code", "source_result_id", "source_entry_id",
     "finish_position", "finish_status", "finish_time_milliseconds", "margin",
-    "final_odds", "popularity", "status", "available_at", "observed_at",
-    "imported_at",
+    "final_odds", "popularity", "status", "available_at", "available_at_status",
+    "observed_at", "observed_at_status", "imported_at",
   ],
 } as const;
 
@@ -80,7 +83,7 @@ export async function convertTargetResults(options: ConvertTargetResultsOptions)
   if (options.entriesFile) {
     const parsedEntries = parseTargetEntriesBytes(await readFile(options.entriesFile), {
       // Required by the parser; this value is discarded, not treated as an observation time.
-      observedAt: options.asOfAt,
+      observedAt: "1970-01-01T00:00:00Z",
     });
     enrichStartTimes(rows, parsedEntries.races, options);
   }
@@ -158,15 +161,18 @@ function buildRows(text: string, options: ConvertTargetResultsOptions) {
   const dateKey = options.raceDate.replaceAll("-", "");
   const idProvider = normalizeIdPart(options.providerCode, "provider-code");
   const venueCode = normalizeIdPart(options.venueCode, "venue-code");
-  const asOfAt = new Date(options.asOfAt).toISOString();
+  const availableAt = options.availableAt ? new Date(options.availableAt).toISOString() : "";
+  const observedAt = options.observedAt ? new Date(options.observedAt).toISOString() : "";
   // TARGET start times are not parsed yet, so every race currently receives this same fallback time.
   const scheduledStartAt = `${options.raceDate}T00:00:00+09:00`;
 
   const common = {
     id: "",
     provider_code: options.providerCode,
-    available_at: asOfAt,
-    observed_at: asOfAt,
+    available_at: availableAt,
+    available_at_status: availableAt ? "known" : "unknown",
+    observed_at: observedAt,
+    observed_at_status: observedAt ? "known" : "unknown",
     imported_at: "",
   };
 
@@ -386,8 +392,14 @@ function normalizeIdPart(value: string, label: string) {
 function validateOptions(options: ConvertTargetResultsOptions) {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(options.raceDate)) throw new Error("race-date must use YYYY-MM-DD.");
   if (!options.venue.trim()) throw new Error("venue is required.");
-  if (!/(?:Z|[+-]\d{2}:\d{2})$/i.test(options.asOfAt) || Number.isNaN(Date.parse(options.asOfAt))) {
-    throw new Error("as-of-at must be an ISO 8601 datetime with timezone.");
+  if (options.asOfAt !== undefined) {
+    throw new Error("as-of-at is unsafe; provide separately verified available-at and observed-at values.");
+  }
+  for (const [name, value] of [["available-at", options.availableAt], ["observed-at", options.observedAt]]) {
+    if (value !== undefined && (!/(?:Z|[+-]\d{2}:\d{2})$/i.test(value)
+      || Number.isNaN(Date.parse(value)))) {
+      throw new Error(`${name} must be an ISO 8601 datetime with timezone.`);
+    }
   }
   normalizeIdPart(options.providerCode, "provider-code");
   normalizeIdPart(options.venueCode, "venue-code");

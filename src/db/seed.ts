@@ -73,6 +73,7 @@ const importedAt = new Date("2026-06-25T23:35:00.000Z");
 
 async function seed() {
   await db.transaction(async (tx) => {
+    // These synthetic seed rows have explicit timestamps, not inferred times.
     await tx
       .insert(horses)
       .values([
@@ -126,7 +127,7 @@ async function seed() {
           observedAt,
           importedAt,
         },
-      ])
+      ].map((row) => ({ ...row, availableAtStatus: "known" as const, observedAtStatus: "known" as const })) as (typeof horses.$inferInsert)[])
       .onConflictDoNothing();
 
     await tx
@@ -153,7 +154,7 @@ async function seed() {
           observedAt,
           importedAt,
         },
-      ])
+      ].map((row) => ({ ...row, availableAtStatus: "known" as const, observedAtStatus: "known" as const })) as (typeof jockeys.$inferInsert)[])
       .onConflictDoNothing();
 
     await tx
@@ -183,7 +184,7 @@ async function seed() {
           observedAt,
           importedAt,
         },
-      ])
+      ].map((row) => ({ ...row, availableAtStatus: "known" as const, observedAtStatus: "known" as const })) as (typeof trainers.$inferInsert)[])
       .onConflictDoNothing();
 
     await tx
@@ -219,7 +220,7 @@ async function seed() {
           observedAt,
           importedAt,
         },
-      ])
+      ].map((row) => ({ ...row, availableAtStatus: "known" as const, observedAtStatus: "known" as const })) as (typeof races.$inferInsert)[])
       .onConflictDoNothing();
 
     await tx
@@ -301,7 +302,7 @@ async function seed() {
           observedAt,
           importedAt,
         },
-      ])
+      ].map((row) => ({ ...row, availableAtStatus: "known" as const, observedAtStatus: "known" as const })) as (typeof raceEntries.$inferInsert)[])
       .onConflictDoNothing();
 
     await tx
@@ -348,7 +349,7 @@ async function seed() {
           observedAt: new Date("2026-06-27T06:46:00.000Z"),
           importedAt: new Date("2026-06-27T06:47:00.000Z"),
         },
-      ])
+      ].map((row) => ({ ...row, availableAtStatus: "known" as const, observedAtStatus: "known" as const })) as (typeof raceResults.$inferInsert)[])
       .onConflictDoNothing();
 
     await tx.execute(sql`select 1`);

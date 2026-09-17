@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { mkdtemp, mkdir, readFile, rename, rm } from "node:fs/promises";
+import { mkdtemp, mkdir, readFile, readdir, rename, rm } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { and, eq, inArray } from "drizzle-orm";
@@ -21,6 +21,9 @@ import { convertTargetResults } from "../target-results/converter";
 import type { DailyCandidate } from "./discover";
 import type { Counts, DailyBatchOperations, LinkCounts, PreparedDay,
   SnapshotCounts } from "./pipeline";
+import { buildTimestampContractApplyPlan, compareTimestampContractBundles,
+  readTimestampContractBundle, timestampsRepresentSameInstant,
+  type TimestampContractComparison } from "./timestamp-contract";
 import { bundleChecksum, selectBundleVersion } from "./versioning";
 
 const venueNames: Record<string, string> = {
@@ -39,12 +42,13 @@ type PreparedWithData = PreparedDay & {
 /** The caller owns the one Preview connection and closes it after the batch. */
 export function createPreviewBatchAdapter(input: {
   csvRoot: string;
-  asOfAtByDay: Record<string, string>;
+  sourceTimesByDay: Record<string, { availableAt?: string; observedAt?: string }>;
   databaseUrl: string;
 }) {
   const client = postgres(input.databaseUrl, { max: 1, prepare: false });
   const db = drizzle(client, { schema });
   const data = (day: PreparedDay) => day as PreparedWithData;
+  const contractSources = new Map<string, string>();
   const venue = (code: string) => {
     const value = venueNames[code];
     if (!value) throw new Error("unsupported_venue_code");
@@ -55,9 +59,7 @@ export function createPreviewBatchAdapter(input: {
     async prepare(candidate: DailyCandidate, mode) {
       if (!candidate.entriesFile || !candidate.resultsFile) throw new Error("incomplete_target_day");
       const key = `${candidate.date}/${candidate.venueCode}`;
-      const asOfAt = input.asOfAtByDay[key];
-      if (!asOfAt || !/(?:Z|[+-]\d{2}:\d{2})$/.test(asOfAt)
-        || Number.isNaN(Date.parse(asOfAt))) throw new Error("explicit_csv_as_of_at_required");
+      const sourceTimes = input.sourceTimesByDay[key] ?? {};
       const tempRoot = await mkdtemp(path.join(os.tmpdir(), "target-batch-"));
       let keepTemp = true;
       try {
@@ -66,7 +68,8 @@ export function createPreviewBatchAdapter(input: {
           input: candidate.resultsFile, outputDir: tempBundle,
           providerCode: "jra_van", raceDate: candidate.date,
           venue: venue(candidate.venueCode), venueCode: candidate.venueCode,
-          asOfAt, entriesFile: candidate.entriesFile,
+          availableAt: sourceTimes.availableAt, observedAt: sourceTimes.observedAt,
+          entriesFile: candidate.entriesFile,
         });
         const report = await validateCsvBundle(tempBundle);
         const entryBytes = await readFile(candidate.entriesFile);
@@ -135,6 +138,87 @@ export function createPreviewBatchAdapter(input: {
         && race.scheduledStartAt.getTime() === row.scheduledStartAt.getTime()
         && race.surface === row.surface && race.distanceMeters === row.distanceMeters))
         ? "same" : "conflict";
+    },
+
+    async inspectTimestampContract(day) {
+      const baseDir = path.join(input.csvRoot, "jra_van", day.date.slice(0, 4),
+        day.date, day.venueCode);
+      const candidate = await readTimestampContractBundle(day.bundleDir);
+      const receipts = await db.select({ sourceDir: importBatches.sourceDir }).from(importBatches)
+        .where(and(eq(importBatches.mode, "import"), eq(importBatches.status, "succeeded")));
+      const receiptDirs = new Set(receipts.map((row) => path.resolve(row.sourceDir)));
+      let versions: string[];
+      try {
+        versions = (await readdir(baseDir, { withFileTypes: true }))
+          .filter((entry) => entry.isDirectory() && /^v\d{3,}$/.test(entry.name))
+          .map((entry) => path.join(baseDir, entry.name));
+      } catch (error) {
+        if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
+        return null;
+      }
+      let mismatch: TimestampContractComparison | null = null;
+      for (const previousDir of versions) {
+        if (path.resolve(previousDir) === path.resolve(day.bundleDir)
+          || !receiptDirs.has(path.resolve(previousDir))) continue;
+        const previous = await readTimestampContractBundle(previousDir);
+        const result = compareTimestampContractBundles(previous, candidate);
+        if (result.safeToApply) {
+          const mismatches = await persistedMismatchCounts(previous,
+            (query, args) => client.unsafe(query, args));
+          for (const table of result.tables) {
+            table.payloadMismatchRows += mismatches[table.table] ?? 0;
+            table.safeToApply &&= table.payloadMismatchRows === 0;
+          }
+          result.safeToApply = result.tables.every((table) => table.safeToApply);
+          if (!result.safeToApply) {
+            result.status = "existing_data_conflict";
+            result.changes = [];
+            mismatch = closerMismatch(mismatch, result);
+            continue;
+          }
+          contractSources.set(`${day.date}/${day.venueCode}`, previousDir);
+          return result;
+        }
+        mismatch = closerMismatch(mismatch, result);
+      }
+      return mismatch;
+    },
+
+    async applyTimestampContract(day, comparison) {
+      const previousDir = contractSources.get(`${day.date}/${day.venueCode}`);
+      if (!previousDir || comparison.status !== "timestamp_contract_only") {
+        throw new Error("timestamp_contract_plan_missing");
+      }
+      const fresh = compareTimestampContractBundles(
+        await readTimestampContractBundle(previousDir),
+        await readTimestampContractBundle(day.bundleDir));
+      if (JSON.stringify(fresh) !== JSON.stringify(comparison)) {
+        throw new Error("timestamp_contract_plan_changed");
+      }
+      const plan = buildTimestampContractApplyPlan(fresh);
+      const previous = await readTimestampContractBundle(previousDir);
+      await client.begin(async (tx) => {
+        const mismatches = await persistedMismatchCounts(previous,
+          (query, args) => tx.unsafe(query, args), true);
+        if (Object.values(mismatches).some((count) => count > 0)) {
+          throw new Error("timestamp_contract_db_payload_mismatch");
+        }
+        for (const change of plan) {
+          if (!contractTables.has(change.table)) throw new Error("timestamp_contract_table_invalid");
+          const rows = await tx.unsafe<Array<{ id: string }>>(
+            `UPDATE "${change.table}" SET available_at = $1, available_at_status = $2, `
+            + `observed_at = $3, observed_at_status = $4 WHERE id = $5 `
+            + `AND available_at IS NOT DISTINCT FROM $6 AND available_at_status = $7 `
+            + `AND observed_at IS NOT DISTINCT FROM $8 AND observed_at_status = $9 RETURNING id`,
+            [change.update.available_at || null, change.update.available_at_status,
+              change.update.observed_at || null, change.update.observed_at_status,
+              change.id, change.before.available_at || null,
+              change.before.available_at_status || (change.before.available_at ? "known" : "unknown"),
+              change.before.observed_at || null,
+              change.before.observed_at_status || (change.before.observed_at ? "known" : "unknown")]);
+          if (rows.length !== 1) throw new Error("timestamp_contract_concurrent_change");
+        }
+      });
     },
 
     async csvDryRun(day) {
@@ -240,4 +324,85 @@ function assertInside(root: string, target: string) {
 async function removeTemp(tempRoot: string) {
   assertInside(os.tmpdir(), tempRoot);
   await rm(tempRoot, { recursive: true, force: true });
+}
+
+const contractTables = new Set([
+  "races", "horses", "jockeys", "trainers", "race_entries", "race_results",
+]);
+
+function closerMismatch(current: TimestampContractComparison | null,
+  next: TimestampContractComparison) {
+  const score = (item: TimestampContractComparison) => item.tables.reduce((total, table) =>
+    total + table.payloadMismatchRows + table.missingIds + table.extraIds, 0);
+  return !current || score(next) < score(current) ? next : current;
+}
+
+async function persistedMismatchCounts(
+  bundle: Record<string, { rows: Record<string, string>[] }>,
+  read: (query: string, args: string[][]) => Promise<Record<string, unknown>[]>,
+  lock = false,
+) {
+  const mismatches: Record<string, number> = {};
+  for (const [file, csv] of Object.entries(bundle)) {
+    const table = file.replace(".sample.csv", "");
+    if (!contractTables.has(table)) throw new Error("timestamp_contract_table_invalid");
+    const ids = csv.rows.map((row) => row.id);
+    mismatches[table] = 0;
+    if (!ids.length) continue;
+    const stored = await read(`SELECT * FROM "${table}" WHERE id = ANY($1::uuid[])${lock ? " FOR UPDATE" : ""}`,
+      [ids]);
+    const byId = new Map(stored.map((row) => [String(row.id), row]));
+    for (const row of csv.rows) {
+      const found = byId.get(row.id);
+      if (!found || !storedPayloadMatches(table, row, found, bundle)
+        || !timestampsRepresentSameInstant(found.available_at, row.available_at)
+        || !timestampsRepresentSameInstant(found.observed_at, row.observed_at)) {
+        mismatches[table]++;
+      }
+    }
+    mismatches[table] += Math.max(0, stored.length - ids.length);
+  }
+  return mismatches;
+}
+
+/** Recheck persisted non-time columns under row locks before any limited UPDATE. */
+function storedPayloadMatches(table: string, csv: Record<string, string>,
+  stored: Record<string, unknown>, bundle: Record<string, { rows: Record<string, string>[] }>) {
+  const fields: Record<string, string[]> = {
+    races: ["race_date", "venue", "race_number", "name", "scheduled_start_at", "surface",
+      "distance_meters", "weather", "track_condition", "status"],
+    horses: ["name", "birth_date", "sex", "color"],
+    jockeys: ["name"],
+    trainers: ["name", "affiliation"],
+    race_entries: ["frame_number", "horse_number", "assigned_weight", "body_weight",
+      "body_weight_diff", "status"],
+    race_results: ["finish_position", "finish_status", "finish_time_milliseconds",
+      "margin", "final_odds", "popularity", "status"],
+  };
+  if (!fields[table] || fields[table].some((key) => key === "scheduled_start_at"
+    ? !timestampsRepresentSameInstant(stored[key], csv[key])
+    : !sameDbValue(stored[key], csv[key]))) return false;
+  const relation: Record<string, Array<[string, string, string]>> = {
+    race_entries: [
+      ["source_race_id", "races.sample.csv", "race_id"],
+      ["source_horse_id", "horses.sample.csv", "horse_id"],
+      ["source_jockey_id", "jockeys.sample.csv", "jockey_id"],
+      ["source_trainer_id", "trainers.sample.csv", "trainer_id"],
+    ],
+    race_results: [["source_entry_id", "race_entries.sample.csv", "race_entry_id"]],
+  };
+  return (relation[table] ?? []).every(([sourceKey, file, dbKey]) => {
+    const sourceIdKey = sourceKey;
+    const related = bundle[file]?.rows.filter((row) => row[sourceIdKey] === csv[sourceIdKey]);
+    return related?.length === 1 && stored[dbKey] === related[0].id;
+  });
+}
+
+function sameDbValue(stored: unknown, csv: string | undefined) {
+  if (stored === null || stored === undefined) return !csv;
+  if (stored instanceof Date) return Boolean(csv) && stored.getTime() === Date.parse(csv!);
+  if (typeof stored === "number") return Boolean(csv) && stored === Number(csv);
+  if (typeof stored === "string" && csv !== undefined && /^-?\d+(?:\.\d+)?$/.test(stored)
+    && /^-?\d+(?:\.\d+)?$/.test(csv)) return Number(stored) === Number(csv);
+  return String(stored) === csv;
 }

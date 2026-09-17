@@ -1,4 +1,5 @@
 import type { DailyCandidate } from "./discover";
+import type { TimestampContractComparison } from "./timestamp-contract";
 
 export type Counts = { races: number; entries: number; results: number };
 export type LinkCounts = {
@@ -25,6 +26,8 @@ export type PreviewState = "empty" | "same" | "conflict";
 export interface DailyBatchOperations {
   prepare(candidate: DailyCandidate, mode: "dry_run" | "apply"): Promise<PreparedDay>;
   previewState(day: PreparedDay): Promise<PreviewState>;
+  inspectTimestampContract(day: PreparedDay): Promise<TimestampContractComparison | null>;
+  applyTimestampContract(day: PreparedDay, comparison: TimestampContractComparison): Promise<void>;
   csvDryRun(day: PreparedDay): Promise<ImportCounts>;
   csvImport(day: PreparedDay): Promise<ImportCounts>;
   snapshotDryRun(day: PreparedDay): Promise<SnapshotCounts>;
@@ -50,6 +53,7 @@ export type DailySummary = {
   trainerLinks: number;
   warnings: string[];
   errors: string[];
+  timestampContract: TimestampContractComparison | null;
 };
 
 /** One date fails closed; earlier dates remain completed and later dates may continue. */
@@ -64,7 +68,7 @@ export async function processTargetDays(
       date: candidate.date, venue: candidate.venueCode,
       status: "incomplete", bundleVersion: null, races: 0, entries: 0, results: 0,
       snapshots: 0, raceLinks: 0, raceEntryLinks: 0, horseLinks: 0,
-      jockeyLinks: 0, trainerLinks: 0, warnings: [], errors: [],
+      jockeyLinks: 0, trainerLinks: 0, warnings: [], errors: [], timestampContract: null,
     };
     days.push(summary);
     if (candidate.status === "incomplete") {
@@ -81,8 +85,29 @@ export async function processTargetDays(
       summary.results = prepared.counts.results;
       summary.snapshots = prepared.snapshotCount;
       stage = "preview_read";
-      const existing = await operations.previewState(prepared);
-      if (existing === "conflict") throw new Error("existing_data_conflict");
+      let existing: PreviewState | "timestamp_contract_only" = await operations.previewState(prepared);
+      if (existing === "conflict") {
+        stage = "timestamp_contract_compare";
+        const comparison = await operations.inspectTimestampContract(prepared);
+        summary.timestampContract = comparison;
+        if (!comparison?.safeToApply || comparison.status === "existing_data_conflict") {
+          throw new Error("existing_data_conflict");
+        }
+        existing = comparison.status === "existing_same" ? "same" : "timestamp_contract_only";
+      }
+
+      // A timestamp-only correction is terminal: no CSV, snapshot, or FK writes follow it.
+      if (existing === "timestamp_contract_only") {
+        summary.warnings.push("timestamp_contract_only");
+        if (mode === "apply") {
+          stage = "timestamp_contract_apply";
+          await operations.applyTimestampContract(prepared, summary.timestampContract!);
+          summary.status = "completed";
+        } else {
+          summary.status = "planned";
+        }
+        continue;
+      }
 
       if (mode === "dry_run") {
         stage = "snapshot_dry_run";

@@ -1,4 +1,4 @@
-import { and, eq, lt, lte } from "drizzle-orm";
+import { and, eq, lt } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/postgres-js";
 import type postgres from "postgres";
 
@@ -17,6 +17,7 @@ import {
   type TargetRaceEntry,
 } from "./calculator";
 import { phase2FeatureDefinitions } from "./definitions";
+import { knownSourceAt } from "../source-time-safety";
 
 type Database = ReturnType<typeof drizzle<Record<string, never>, postgres.Sql>>;
 
@@ -270,8 +271,8 @@ async function getTargetRaceEntries(db: Database, asOfAt: Date) {
     .innerJoin(races, eq(raceEntries.raceId, races.id))
     .where(
       and(
-        lte(races.availableAt, asOfAt),
-        lte(raceEntries.availableAt, asOfAt),
+        knownSourceAt(races, asOfAt),
+        knownSourceAt(raceEntries, asOfAt),
       ),
     );
 
@@ -304,13 +305,17 @@ async function getPastPerformances(
       and(
         eq(raceEntries.horseId, target.horseId),
         lt(races.scheduledStartAt, target.scheduledStartAt),
-        lte(races.availableAt, asOfAt),
-        lte(raceEntries.availableAt, asOfAt),
-        lte(raceResults.availableAt, asOfAt),
+        knownSourceAt(races, asOfAt),
+        knownSourceAt(raceEntries, asOfAt),
+        knownSourceAt(raceResults, asOfAt),
       ),
     );
 
-  return rows satisfies PastPerformance[];
+  return rows.map((row) => ({ ...row,
+    // The DB time-status CHECK guarantees non-null for known timestamps.
+    resultAvailableAt: row.resultAvailableAt!,
+    resultObservedAt: row.resultObservedAt!,
+  })) satisfies PastPerformance[];
 }
 
 async function getJockeyPastPerformances(
@@ -343,11 +348,15 @@ async function getJockeyPastPerformances(
       and(
         eq(raceEntries.jockeyId, target.jockeyId),
         lt(races.scheduledStartAt, target.scheduledStartAt),
-        lte(races.availableAt, asOfAt),
-        lte(raceEntries.availableAt, asOfAt),
-        lte(raceResults.availableAt, asOfAt),
+        knownSourceAt(races, asOfAt),
+        knownSourceAt(raceEntries, asOfAt),
+        knownSourceAt(raceResults, asOfAt),
       ),
     );
 
-  return rows satisfies JockeyPastPerformance[];
+  return rows.map((row) => ({ ...row,
+    // The DB time-status CHECK guarantees non-null for known timestamps.
+    resultAvailableAt: row.resultAvailableAt!,
+    resultObservedAt: row.resultObservedAt!,
+  })) satisfies JockeyPastPerformance[];
 }

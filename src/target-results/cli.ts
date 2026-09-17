@@ -12,7 +12,9 @@ convertTargetResults({
   raceDate: requireValue("--race-date"),
   venue: requireValue("--venue"),
   venueCode: requireValue("--venue-code"),
-  asOfAt: requireValue("--as-of-at"),
+  availableAt: optionalValue("--available-at"),
+  observedAt: optionalValue("--observed-at"),
+  asOfAt: optionalValue("--as-of-at"),
   entriesFile: entriesFile ? path.resolve(entriesFile) : undefined,
   overwrite: args.includes("--overwrite"),
 })

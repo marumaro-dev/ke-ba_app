@@ -13,21 +13,29 @@ import {
   timestamp,
   unique,
   uuid,
+  type AnyPgColumn,
 } from "drizzle-orm/pg-core";
 import { sql } from "drizzle-orm";
 import type {
   PreRaceEntryRaw as PreRaceEntryRawFields,
 } from "../pre-race-snapshots/types";
 
+export const observationTimeStatusEnum = pgEnum("observation_time_status", [
+  "known",
+  "unknown",
+]);
+
 const timestampColumns = {
   availableAt: timestamp("available_at", {
     withTimezone: true,
     mode: "date",
-  }).notNull(),
+  }),
+  availableAtStatus: observationTimeStatusEnum("available_at_status").notNull(),
   observedAt: timestamp("observed_at", {
     withTimezone: true,
     mode: "date",
-  }).notNull(),
+  }),
+  observedAtStatus: observationTimeStatusEnum("observed_at_status").notNull(),
   importedAt: timestamp("imported_at", {
     withTimezone: true,
     mode: "date",
@@ -47,6 +55,24 @@ const timestampColumns = {
     .notNull()
     .defaultNow(),
 };
+
+function timeStatusChecks(tableName: string, table: {
+  availableAt: AnyPgColumn;
+  availableAtStatus: AnyPgColumn;
+  observedAt: AnyPgColumn;
+  observedAtStatus: AnyPgColumn;
+}) {
+  return [
+    check(`${tableName}_available_time_status_check`, sql`(
+      (${table.availableAtStatus} = 'known' and ${table.availableAt} is not null) or
+      (${table.availableAtStatus} = 'unknown' and ${table.availableAt} is null)
+    )`),
+    check(`${tableName}_observed_time_status_check`, sql`(
+      (${table.observedAtStatus} = 'known' and ${table.observedAt} is not null) or
+      (${table.observedAtStatus} = 'unknown' and ${table.observedAt} is null)
+    )`),
+  ];
+}
 
 export const raceStatusEnum = pgEnum("race_status", [
   "scheduled",
@@ -109,11 +135,6 @@ export const predictionRunStatusEnum = pgEnum("prediction_run_status", [
 
 export const predictionTypeEnum = pgEnum("prediction_type", ["rule_based"]);
 
-export const observationTimeStatusEnum = pgEnum("observation_time_status", [
-  "known",
-  "unknown",
-]);
-
 export const races = pgTable(
   "races",
   {
@@ -134,6 +155,7 @@ export const races = pgTable(
     ...timestampColumns,
   },
   (table) => [
+    ...timeStatusChecks("races", table),
     index("races_scheduled_start_at_idx").on(table.scheduledStartAt),
     unique("races_date_venue_number_unique").on(
       table.raceDate,
@@ -158,20 +180,20 @@ export const horses = pgTable("horses", {
   sex: horseSexEnum("sex"),
   color: text("color"),
   ...timestampColumns,
-});
+}, (table) => timeStatusChecks("horses", table));
 
 export const jockeys = pgTable("jockeys", {
   id: uuid("id").primaryKey().defaultRandom(),
   name: text("name").notNull(),
   ...timestampColumns,
-});
+}, (table) => timeStatusChecks("jockeys", table));
 
 export const trainers = pgTable("trainers", {
   id: uuid("id").primaryKey().defaultRandom(),
   name: text("name").notNull(),
   affiliation: text("affiliation"),
   ...timestampColumns,
-});
+}, (table) => timeStatusChecks("trainers", table));
 
 export const raceEntries = pgTable(
   "race_entries",
@@ -201,6 +223,7 @@ export const raceEntries = pgTable(
     ...timestampColumns,
   },
   (table) => [
+    ...timeStatusChecks("race_entries", table),
     index("race_entries_horse_id_idx").on(table.horseId),
     unique("race_entries_race_horse_unique").on(
       table.raceId,
@@ -248,6 +271,7 @@ export const raceResults = pgTable(
     ...timestampColumns,
   },
   (table) => [
+    ...timeStatusChecks("race_results", table),
     unique("race_results_race_entry_unique").on(table.raceEntryId),
     check(
       "race_results_finish_position_check",

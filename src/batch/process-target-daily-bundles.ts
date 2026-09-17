@@ -26,14 +26,20 @@ async function main() {
   if (withinRepository(rawRoot) || withinRepository(csvRoot)) {
     throw new Error("Raw TARGET and generated bundles must remain outside this repository");
   }
-  const mapPath = path.resolve(value("--csv-as-of-at-map"));
-  const parsed: unknown = JSON.parse(await readFile(mapPath, "utf8"));
+  if (optional("--csv-as-of-at-map") !== undefined) {
+    throw new Error("--csv-as-of-at-map is unsafe; use --source-times-map with separately verified times");
+  }
+  const mapFile = optional("--source-times-map");
+  const parsed: unknown = mapFile ? JSON.parse(await readFile(path.resolve(mapFile), "utf8")) : {};
   if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)
-    || Object.values(parsed).some((item) => typeof item !== "string")) {
-    throw new Error("CSV as-of-at map must be an object of explicitly supplied strings");
+    || Object.values(parsed).some((item) => !item || typeof item !== "object"
+      || Array.isArray(item) || Object.keys(item).some((key) => !["availableAt", "observedAt"].includes(key))
+      || Object.values(item).some((value) => typeof value !== "string"))) {
+    throw new Error("Source times map must provide separately verified availableAt/observedAt strings");
   }
   const adapter = createPreviewBatchAdapter({ csvRoot,
-    asOfAtByDay: parsed as Record<string, string>, databaseUrl: process.env.DATABASE_URL! });
+    sourceTimesByDay: parsed as Record<string, { availableAt?: string; observedAt?: string }>,
+    databaseUrl: process.env.DATABASE_URL! });
   try {
     const report = await processTargetDays(candidates,
       mode === "--apply" ? "apply" : "dry_run", adapter.operations);
