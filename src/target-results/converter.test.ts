@@ -1,4 +1,4 @@
-import { mkdtemp, readFile, rm } from "node:fs/promises";
+import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
@@ -68,6 +68,52 @@ describe("convertTargetResults", () => {
     ]);
     expect(resultRows[0].values.finish_time_milliseconds).toBe("95900");
     expect(resultRows[1].values.finish_time_milliseconds).toBe("");
+    expect(raceRows[0].values.scheduled_start_at).toBe("2026-06-14T00:00:00+09:00");
+  });
+
+  it("enriches a race start time from a matching synthetic entries file", async () => {
+    const temporaryDirectory = await mkdtemp(path.join(tmpdir(), "target-results-"));
+    temporaryDirectories.push(temporaryDirectory);
+    const result = await convertTargetResults({
+      input: path.join(process.cwd(), "src/target-results/fixtures/single-race.synthetic.txt"),
+      entriesFile: path.join(process.cwd(), "src/target-results/fixtures/entries-start-times.synthetic.txt"),
+      outputDir: path.join(temporaryDirectory, "output"),
+      providerCode: "jra_van",
+      raceDate: "2026-06-14",
+      venue: "架空競馬場",
+      venueCode: "synthetic",
+      asOfAt: "2026-06-14T18:00:00+09:00",
+    });
+
+    expect(result.rowCounts.races).toBe(1);
+    const raceRows = await readRows(result.outputDir, "races.sample.csv");
+    expect(raceRows[0].values.scheduled_start_at).toBe("2026-06-14T10:00:00+09:00");
+  });
+
+  it.each([
+    ["date mismatch", (text: string) => text.replace("2026年 6月14日", "2026年 6月15日"), "date or venue"],
+    ["venue mismatch", (text: string) => text.replace("1回架空競馬場", "1回空想競馬場"), "date or venue"],
+    ["missing race number", (text: string) => text.replace("\n1R\n", "\n2R\n"), "missing race 1"],
+    ["duplicate race number", (text: string) => `${text}\n${text}`, "duplicate race number 1"],
+  ])("rejects entries with %s", async (_label, mutate, message) => {
+    const temporaryDirectory = await mkdtemp(path.join(tmpdir(), "target-results-"));
+    temporaryDirectories.push(temporaryDirectory);
+    const fixture = await readFile(
+      path.join(process.cwd(), "src/target-results/fixtures/entries-start-times.synthetic.txt"), "utf8",
+    );
+    const entriesFile = path.join(temporaryDirectory, "entries.synthetic.txt");
+    await writeFile(entriesFile, mutate(fixture));
+
+    await expect(convertTargetResults({
+      input: path.join(process.cwd(), "src/target-results/fixtures/single-race.synthetic.txt"),
+      entriesFile,
+      outputDir: path.join(temporaryDirectory, "output"),
+      providerCode: "jra_van",
+      raceDate: "2026-06-14",
+      venue: "架空競馬場",
+      venueCode: "synthetic",
+      asOfAt: "2026-06-14T18:00:00+09:00",
+    })).rejects.toThrow(message);
   });
 
   it("converts multiple synthetic races and deduplicates shared entities", async () => {

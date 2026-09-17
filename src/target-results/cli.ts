@@ -3,6 +3,7 @@ import path from "node:path";
 import { convertTargetResults } from "./converter";
 
 const args = process.argv.slice(2);
+const entriesFile = optionalValue("--entries-file");
 
 convertTargetResults({
   input: path.resolve(requireValue("--input")),
@@ -12,6 +13,7 @@ convertTargetResults({
   venue: requireValue("--venue"),
   venueCode: requireValue("--venue-code"),
   asOfAt: requireValue("--as-of-at"),
+  entriesFile: entriesFile ? path.resolve(entriesFile) : undefined,
   overwrite: args.includes("--overwrite"),
 })
   .then((result) => {
@@ -26,10 +28,20 @@ convertTargetResults({
   });
 
 function requireValue(name: string) {
+  const value = optionalValue(name);
+  if (!value) throw new Error(`${name} is required.`);
+  return value;
+}
+
+function optionalValue(name: string) {
   const inline = args.find((arg) => arg.startsWith(`${name}=`));
-  if (inline) return inline.slice(name.length + 1);
+  if (inline !== undefined) {
+    const value = inline.slice(name.length + 1);
+    if (!value) throw new Error(`${name} requires a value.`);
+    return value;
+  }
   const index = args.indexOf(name);
   const value = index >= 0 ? args[index + 1] : undefined;
-  if (!value || value.startsWith("--")) throw new Error(`${name} is required.`);
+  if (index >= 0 && (!value || value.startsWith("--"))) throw new Error(`${name} requires a value.`);
   return value;
 }

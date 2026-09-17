@@ -2,6 +2,7 @@ import { createHash } from "node:crypto";
 import { mkdir, mkdtemp, readFile, rename, rm, stat, writeFile } from "node:fs/promises";
 import path from "node:path";
 
+import { parseTargetEntriesBytes, type ParsedTargetRace } from "../target-entries/parser";
 import {
   horseCsvSchema,
   jockeyCsvSchema,
@@ -19,6 +20,7 @@ export type ConvertTargetResultsOptions = {
   venue: string;
   venueCode: string;
   asOfAt: string;
+  entriesFile?: string;
   overwrite?: boolean;
 };
 
@@ -75,6 +77,13 @@ export async function convertTargetResults(options: ConvertTargetResultsOptions)
   const bytes = await readFile(options.input);
   const text = decodeTargetText(bytes).normalize("NFKC");
   const rows = buildRows(text, options);
+  if (options.entriesFile) {
+    const parsedEntries = parseTargetEntriesBytes(await readFile(options.entriesFile), {
+      // Required by the parser; this value is discarded, not treated as an observation time.
+      observedAt: options.asOfAt,
+    });
+    enrichStartTimes(rows, parsedEntries.races, options);
+  }
   validateRows(rows);
 
   const csvByKey = Object.fromEntries(
@@ -97,6 +106,45 @@ export async function convertTargetResults(options: ConvertTargetResultsOptions)
       ]),
     ) as Record<keyof typeof FILES, number>,
   };
+}
+
+function enrichStartTimes(
+  rows: ReturnType<typeof buildRows>,
+  entryRaces: ParsedTargetRace[],
+  options: ConvertTargetResultsOptions,
+) {
+  const byNumber = new Map<number, ParsedTargetRace>();
+  for (const race of entryRaces) {
+    if (race.raceDate !== options.raceDate || race.venue !== options.venue) {
+      throw new Error("TARGET entries race date or venue does not match the results input.");
+    }
+    if (byNumber.has(race.raceNumber)) {
+      throw new Error(`TARGET entries contains duplicate race number ${race.raceNumber}.`);
+    }
+    byNumber.set(race.raceNumber, race);
+  }
+  if (byNumber.size !== rows.races.length) {
+    throw new Error("TARGET entries and results have different race counts.");
+  }
+
+  for (const resultRace of rows.races) {
+    const raceNumber = Number(resultRace.race_number);
+    const entryRace = byNumber.get(raceNumber);
+    if (!entryRace) throw new Error(`TARGET entries is missing race ${raceNumber}.`);
+    if (!entryRace.scheduledStartAt || entryRace.scheduledStartAt.includes("T00:00:")) {
+      throw new Error(`TARGET entries has no supported start time for race ${raceNumber}.`);
+    }
+    if (entryRace.surface !== resultRace.surface ||
+        entryRace.distanceMeters !== Number(resultRace.distance_meters)) {
+      throw new Error(`TARGET entries race details do not match race ${raceNumber}.`);
+    }
+    const resultEntryCount = rows.raceEntries.filter((entry) =>
+      entry.source_race_id === resultRace.source_race_id).length;
+    if (entryRace.declaredEntries !== resultEntryCount) {
+      throw new Error(`TARGET entries declared count does not match race ${raceNumber}.`);
+    }
+    resultRace.scheduled_start_at = entryRace.scheduledStartAt;
+  }
 }
 
 function buildRows(text: string, options: ConvertTargetResultsOptions) {
