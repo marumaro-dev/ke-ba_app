@@ -129,6 +129,72 @@ const files = {
   raceResults: "race_results.sample.csv",
 } as const;
 
+/** Offline validation: no environment loading, client creation, or audit writes. */
+export async function validateCsvBundle(csvDir: string) {
+  const loaded = await loadAndValidateCsv(csvDir);
+  for (const [name, file, key] of [
+    ["races", loaded.races, "source_race_id"],
+    ["horses", loaded.horses, "source_horse_id"],
+    ["jockeys", loaded.jockeys, "source_jockey_id"],
+    ["trainers", loaded.trainers, "source_trainer_id"],
+    ["raceEntries", loaded.raceEntries, "source_entry_id"],
+    ["raceResults", loaded.raceResults, "source_result_id"],
+  ] as const) {
+    const values = file.records.map((record) => record.rawRow[key]);
+    if (new Set(values).size !== values.length) {
+      throw new Error(`${name} contains duplicate source IDs`);
+    }
+  }
+  const raceNumbers = loaded.races.records.map((race) => `${race.race_date}:${race.venue}:${race.race_number}`);
+  if (new Set(raceNumbers).size !== raceNumbers.length) {
+    throw new Error("Bundle contains duplicate race natural keys");
+  }
+  resolveReferences(loaded);
+  const entriesByRace = new Map<string, number>();
+  const entryToRace = new Map<string, string>();
+  for (const entry of loaded.raceEntries.records) {
+    entriesByRace.set(entry.source_race_id, (entriesByRace.get(entry.source_race_id) ?? 0) + 1);
+    entryToRace.set(entry.source_entry_id, entry.source_race_id);
+  }
+  const resultsByRace = new Map<string, number>();
+  const resultEntries = new Set<string>();
+  for (const result of loaded.raceResults.records) {
+    const raceId = entryToRace.get(result.source_entry_id);
+    if (!raceId || resultEntries.has(result.source_entry_id)) {
+      throw new Error("A result is orphaned or duplicated for an entry");
+    }
+    resultEntries.add(result.source_entry_id);
+    resultsByRace.set(raceId, (resultsByRace.get(raceId) ?? 0) + 1);
+  }
+  for (const entry of loaded.raceEntries.records) {
+    if (!resultEntries.has(entry.source_entry_id)
+      && entry.status !== "excluded" && entry.status !== "scratched") {
+      throw new Error("A running entry has no result");
+    }
+  }
+  return {
+    rowCounts: {
+      races: loaded.races.records.length,
+      horses: loaded.horses.records.length,
+      jockeys: loaded.jockeys.records.length,
+      trainers: loaded.trainers.records.length,
+      raceEntries: loaded.raceEntries.records.length,
+      raceResults: loaded.raceResults.records.length,
+    },
+    races: loaded.races.records.map((race) => ({
+      raceDate: race.race_date,
+      venue: race.venue,
+      raceNumber: race.race_number,
+      sourceRaceId: race.source_race_id,
+      scheduledStartAt: race.scheduled_start_at,
+      surface: race.surface,
+      distanceMeters: race.distance_meters,
+      entries: entriesByRace.get(race.source_race_id) ?? 0,
+      results: resultsByRace.get(race.source_race_id) ?? 0,
+    })),
+  };
+}
+
 export async function importCsv(options: ImportOptions) {
   loadLocalEnv();
   const databaseUrl = process.env.DATABASE_URL;
