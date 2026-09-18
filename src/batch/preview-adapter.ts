@@ -22,7 +22,7 @@ import type { DailyCandidate } from "./discover";
 import type { Counts, DailyBatchOperations, LinkCounts, PreparedDay,
   SnapshotCounts } from "./pipeline";
 import { buildTimestampContractApplyPlan, compareTimestampContractBundles,
-  readTimestampContractBundle, timestampsRepresentSameInstant,
+  isTimestampCorrectionTable, readTimestampContractBundle, timestampsRepresentSameInstant,
   type TimestampContractComparison } from "./timestamp-contract";
 import { bundleChecksum, selectBundleVersion } from "./versioning";
 
@@ -204,7 +204,7 @@ export function createPreviewBatchAdapter(input: {
           throw new Error("timestamp_contract_db_payload_mismatch");
         }
         for (const change of plan) {
-          if (!contractTables.has(change.table)) throw new Error("timestamp_contract_table_invalid");
+          if (!isTimestampCorrectionTable(change.table)) throw new Error("timestamp_contract_table_invalid");
           const rows = await tx.unsafe<Array<{ id: string }>>(
             `UPDATE "${change.table}" SET available_at = $1, available_at_status = $2, `
             + `observed_at = $3, observed_at_status = $4 WHERE id = $5 `
@@ -337,7 +337,7 @@ function closerMismatch(current: TimestampContractComparison | null,
   return !current || score(next) < score(current) ? next : current;
 }
 
-async function persistedMismatchCounts(
+export async function persistedMismatchCounts(
   bundle: Record<string, { rows: Record<string, string>[] }>,
   read: (query: string, args: string[][]) => Promise<Record<string, unknown>[]>,
   lock = false,
@@ -355,8 +355,9 @@ async function persistedMismatchCounts(
     for (const row of csv.rows) {
       const found = byId.get(row.id);
       if (!found || !storedPayloadMatches(table, row, found, bundle)
-        || !timestampsRepresentSameInstant(found.available_at, row.available_at)
-        || !timestampsRepresentSameInstant(found.observed_at, row.observed_at)) {
+        || (isTimestampCorrectionTable(table)
+          && (!timestampsRepresentSameInstant(found.available_at, row.available_at)
+            || !timestampsRepresentSameInstant(found.observed_at, row.observed_at)))) {
         mismatches[table]++;
       }
     }

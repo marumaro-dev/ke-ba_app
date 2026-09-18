@@ -73,13 +73,83 @@ describe("strict timestamp contract comparison", () => {
     }
     const result = compareTimestampContractBundles(previous, candidate);
     expect(result.status).toBe("timestamp_contract_only");
-    expect(result.tables.every((table) => table.safeToApply && table.timestampOnlyRows === 1)).toBe(true);
+    expect(result.tables.every((table) => table.safeToApply)).toBe(true);
+    expect(result.tables.filter((table) => table.timestampOnlyRows === 1).map((table) => table.table).sort())
+      .toEqual(["race_entries", "race_results", "races"]);
     const plan = buildTimestampContractApplyPlan(result);
-    expect(plan).toHaveLength(6);
+    expect(plan).toHaveLength(3);
     expect(Object.keys(plan[0].update).sort()).toEqual([
       "available_at", "available_at_status", "observed_at", "observed_at_status",
     ].sort());
     expect(JSON.stringify(plan)).not.toContain("name");
+  });
+
+  it("ignores master time differences but still rejects master payload and ID differences", () => {
+    const previous = bundle(); const candidate = structuredClone(previous);
+    for (const file of ["horses.sample.csv", "jockeys.sample.csv", "trainers.sample.csv"]) {
+      candidate[file].headers.push("available_at_status", "observed_at_status");
+      Object.assign(candidate[file].rows[0], { available_at: "", available_at_status: "unknown",
+        observed_at: "", observed_at_status: "unknown" });
+    }
+    const same = compareTimestampContractBundles(previous, candidate);
+    expect(same).toMatchObject({ status: "existing_same", safeToApply: true, changes: [] });
+    expect(same.tables.filter((table) => table.timestampOnlyRows !== 0)).toEqual([]);
+    candidate["horses.sample.csv"].rows[0].name = "Different Fictional Horse";
+    expect(compareTimestampContractBundles(previous, candidate)).toMatchObject({
+      status: "existing_data_conflict", safeToApply: false,
+    });
+    candidate["horses.sample.csv"].rows[0].name = previous["horses.sample.csv"].rows[0].name;
+    candidate["jockeys.sample.csv"].rows = [];
+    expect(compareTimestampContractBundles(previous, candidate)).toMatchObject({
+      status: "existing_data_conflict", safeToApply: false,
+    });
+  });
+
+  it.each([
+    ["races.sample.csv", "name"],
+    ["race_entries.sample.csv", "status"],
+    ["race_results.sample.csv", "finish_status"],
+  ])("rejects %s payload mismatch despite valid timestamp changes", (file, key) => {
+    const previous = bundle(); const candidate = structuredClone(previous);
+    candidate[file].rows[0].available_at = "";
+    candidate[file].rows[0][key] = "different";
+    const result = compareTimestampContractBundles(previous, candidate);
+    expect(result.status).toBe("existing_data_conflict");
+    expect(result.safeToApply).toBe(false);
+    expect(result.changes).toEqual([]);
+  });
+
+  it("plans only 12 race, 177 entry and 175 result updates", () => {
+    const previous = bundle(); const candidate = structuredClone(previous);
+    for (const [file, count] of [["races.sample.csv", 12], ["race_entries.sample.csv", 177],
+      ["race_results.sample.csv", 175]] as const) {
+      previous[file].rows = Array.from({ length: count }, (_, index) => ({
+        ...previous[file].rows[0], id: `synthetic-${file}-${index}`,
+      }));
+      candidate[file].rows = previous[file].rows.map((row) => ({ ...row,
+        available_at: "", observed_at: "" }));
+    }
+    for (const file of ["horses.sample.csv", "jockeys.sample.csv", "trainers.sample.csv"]) {
+      candidate[file].rows[0].available_at = "";
+      candidate[file].rows[0].observed_at = "";
+    }
+    const result = compareTimestampContractBundles(previous, candidate);
+    const plan = buildTimestampContractApplyPlan(result);
+    expect(result).toMatchObject({ status: "timestamp_contract_only", safeToApply: true });
+    expect(plan).toHaveLength(364);
+    expect(Object.fromEntries(["races", "race_entries", "race_results"].map((table) =>
+      [table, plan.filter((row) => row.table === table).length]))).toEqual({
+      races: 12, race_entries: 177, race_results: 175,
+    });
+    expect(plan.some((row) => ["horses", "jockeys", "trainers"].includes(row.table))).toBe(false);
+  });
+
+  it("rejects a forged master update plan", () => {
+    const previous = bundle(); const candidate = structuredClone(previous);
+    candidate["races.sample.csv"].rows[0].available_at = "";
+    const comparison = compareTimestampContractBundles(previous, candidate);
+    comparison.changes.push({ ...comparison.changes[0], table: "horses" });
+    expect(() => buildTimestampContractApplyPlan(comparison)).toThrow("timestamp_contract_table_invalid");
   });
 
   it.each([

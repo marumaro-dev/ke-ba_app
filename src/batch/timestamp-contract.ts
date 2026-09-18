@@ -9,6 +9,11 @@ export const timestampColumns = [
   "available_at", "available_at_status", "observed_at", "observed_at_status",
 ] as const;
 const timeColumns = new Set<string>(timestampColumns);
+const dateScopedTables = new Set(["races", "race_entries", "race_results"]);
+
+export function isTimestampCorrectionTable(table: string): boolean {
+  return dateScopedTables.has(table);
+}
 
 /** Compare only timestamp columns by instant; reject ambiguous or invalid values. */
 export function timestampsRepresentSameInstant(a: unknown, b: unknown): boolean {
@@ -64,13 +69,16 @@ export function buildTimestampContractApplyPlan(comparison: TimestampContractCom
   if (comparison.status !== "timestamp_contract_only" || !comparison.safeToApply) {
     throw new Error("timestamp_contract_not_safe_to_apply");
   }
-  return comparison.changes.map(({ table, id, before, after }) => ({
-    table, id,
-    before: { available_at: before.available_at, available_at_status: before.available_at_status,
-      observed_at: before.observed_at, observed_at_status: before.observed_at_status },
-    update: { available_at: after.available_at, available_at_status: after.available_at_status,
-      observed_at: after.observed_at, observed_at_status: after.observed_at_status },
-  }));
+  return comparison.changes.map(({ table, id, before, after }) => {
+    if (!isTimestampCorrectionTable(table)) throw new Error("timestamp_contract_table_invalid");
+    return {
+      table, id,
+      before: { available_at: before.available_at, available_at_status: before.available_at_status,
+        observed_at: before.observed_at, observed_at_status: before.observed_at_status },
+      update: { available_at: after.available_at, available_at_status: after.available_at_status,
+        observed_at: after.observed_at, observed_at_status: after.observed_at_status },
+    };
+  });
 }
 
 type CsvTable = { headers: string[]; rows: Array<Record<string, string>> };
@@ -104,15 +112,17 @@ export function compareTimestampContractBundles(
         table.payloadMismatchRows++;
         continue;
       }
-      const previousTime = Object.fromEntries(timestampColumns.map((key) => [key, before[key] ?? ""]));
-      const nextTime = Object.fromEntries(timestampColumns.map((key) => [key, after[key] ?? ""]));
-      const availableEqual = timestampsRepresentSameInstant(previousTime.available_at, nextTime.available_at);
-      const observedEqual = timestampsRepresentSameInstant(previousTime.observed_at, nextTime.observed_at);
-      if (previousTime.available_at_status !== nextTime.available_at_status
-        || previousTime.observed_at_status !== nextTime.observed_at_status
-        || !availableEqual || !observedEqual) {
-        table.timestampOnlyRows++;
-        changes.push({ table: table.table, id, before: previousTime, after: nextTime });
+      if (isTimestampCorrectionTable(table.table)) {
+        const previousTime = Object.fromEntries(timestampColumns.map((key) => [key, before[key] ?? ""]));
+        const nextTime = Object.fromEntries(timestampColumns.map((key) => [key, after[key] ?? ""]));
+        const availableEqual = timestampsRepresentSameInstant(previousTime.available_at, nextTime.available_at);
+        const observedEqual = timestampsRepresentSameInstant(previousTime.observed_at, nextTime.observed_at);
+        if (previousTime.available_at_status !== nextTime.available_at_status
+          || previousTime.observed_at_status !== nextTime.observed_at_status
+          || !availableEqual || !observedEqual) {
+          table.timestampOnlyRows++;
+          changes.push({ table: table.table, id, before: previousTime, after: nextTime });
+        }
       }
     }
     for (const id of newById.keys()) if (!oldById.has(id)) table.extraIds++;

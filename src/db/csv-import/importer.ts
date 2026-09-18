@@ -53,6 +53,18 @@ export function toImportTimeColumns(record: Pick<RaceCsvRecord,
   };
 }
 
+const masterSourceTimeKeys = new Set([
+  "availableAt", "availableAtStatus", "observedAt", "observedAtStatus",
+]);
+
+/** Shared master updates must not replace source times recorded by another day. */
+export function withoutMasterSourceTimes<T extends object>(values: T):
+  Omit<T, keyof ReturnType<typeof toImportTimeColumns>> {
+  return Object.fromEntries(Object.entries(values)
+    .filter(([key]) => !masterSourceTimeKeys.has(key))) as
+    Omit<T, keyof ReturnType<typeof toImportTimeColumns>>;
+}
+
 type ImportSummaryItem = {
   file: string;
   entityType: string;
@@ -321,7 +333,7 @@ export async function importCsv(options: ImportOptions) {
             })
             .onConflictDoUpdate({
               target: horses.id,
-              set: {
+              set: withoutMasterSourceTimes({
                 name: horse.name,
                 birthDate: horse.birth_date,
                 sex: horse.sex,
@@ -329,7 +341,7 @@ export async function importCsv(options: ImportOptions) {
                 ...toImportTimeColumns(horse),
                 importedAt: horse.imported_at ?? new Date(),
                 updatedAt: new Date(),
-              },
+              }),
             });
           incrementCounters(counters, exists.length > 0);
         }
@@ -353,12 +365,12 @@ export async function importCsv(options: ImportOptions) {
             })
             .onConflictDoUpdate({
               target: jockeys.id,
-              set: {
+              set: withoutMasterSourceTimes({
                 name: jockey.name,
                 ...toImportTimeColumns(jockey),
                 importedAt: jockey.imported_at ?? new Date(),
                 updatedAt: new Date(),
-              },
+              }),
             });
           incrementCounters(counters, exists.length > 0);
         }
@@ -383,13 +395,13 @@ export async function importCsv(options: ImportOptions) {
             })
             .onConflictDoUpdate({
               target: trainers.id,
-              set: {
+              set: withoutMasterSourceTimes({
                 name: trainer.name,
                 affiliation: trainer.affiliation,
                 ...toImportTimeColumns(trainer),
                 importedAt: trainer.imported_at ?? new Date(),
                 updatedAt: new Date(),
-              },
+              }),
             });
           incrementCounters(counters, exists.length > 0);
         }

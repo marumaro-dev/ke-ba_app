@@ -47,11 +47,15 @@ Phase 1の競馬データ管理アプリに、合法的に取得した競馬デ�
 | `id` | 任意 | 内部UUID。空の場合は取込処理で決定的UUIDを生成する。 |
 | `provider_code` | 必須 | データ提供元コード。例: `licensed_csv_demo`、`jra_van`、`jrdb` |
 | `source_*_id` | 必須 | 提供元側の外部ID。エンティティ種別ごとに名前を変える。 |
-| `available_at` | 必須 | その情報が利用可能になった時刻。データリーク対策の基準。 |
-| `observed_at` | 必須 | システムまたは提供元ファイルで値を観測した時刻。 |
+| `available_at` | 列は必須、値はnullable | その情報が利用可能になった時刻。時刻不明なら空欄。 |
+| `available_at_status` | 必須 | `known` または `unknown`。時刻の有無と一致させる。 |
+| `observed_at` | 列は必須、値はnullable | システムまたは提供元ファイルで値を観測した時刻。時刻不明なら空欄。 |
+| `observed_at_status` | 必須 | `known` または `unknown`。時刻の有無と一致させる。 |
 | `imported_at` | 任意 | DBへ取り込んだ時刻。空の場合は取込実行時刻を使う。 |
 
 `source_*_id` はPhase 1 DBへ直接保存しない。ただし、次フェーズ以降で `ingestion.external_entity_ids` のような対応表を追加する場合の入力として維持する。
+
+個別CSV表にも共通カラムの2つのstatus列が必須である。時刻不明時は時刻を空欄、statusを `unknown` とし、発走予定時刻やファイル更新時刻から観測時刻を推測しない。
 
 ## 5. CSVカラム定義
 
@@ -74,8 +78,8 @@ Phase 1の競馬データ管理アプリに、合法的に取得した競馬デ�
 | `weather` | 任意 | string | `weather` | 天候 |
 | `track_condition` | 任意 | string | `track_condition` | 馬場状態 |
 | `status` | 必須 | enum | `status` | `scheduled` / `confirmed` / `cancelled` |
-| `available_at` | 必須 | datetime | `available_at` | 利用可能時刻 |
-| `observed_at` | 必須 | datetime | `observed_at` | 観測時刻 |
+| `available_at` | 列必須・値nullable | datetime / 空欄 | `available_at` | 利用可能時刻。不明なら空欄 / `unknown`。 |
+| `observed_at` | 列必須・値nullable | datetime / 空欄 | `observed_at` | 観測時刻。不明なら空欄 / `unknown`。 |
 | `imported_at` | 任意 | datetime | `imported_at` | 取込時刻 |
 
 DB上の一意性は `race_date + venue + race_number` で担保する。
@@ -93,8 +97,8 @@ DB上の一意性は `race_date + venue + race_number` で担保する。
 | `birth_date` | 任意 | date | `birth_date` | 生年月日 |
 | `sex` | 任意 | enum | `sex` | `male` / `female` / `gelding` |
 | `color` | 任意 | string | `color` | 毛色 |
-| `available_at` | 必須 | datetime | `available_at` | 利用可能時刻 |
-| `observed_at` | 必須 | datetime | `observed_at` | 観測時刻 |
+| `available_at` | 列必須・値nullable | datetime / 空欄 | `available_at` | 利用可能時刻。不明なら空欄 / `unknown`。 |
+| `observed_at` | 列必須・値nullable | datetime / 空欄 | `observed_at` | 観測時刻。不明なら空欄 / `unknown`。 |
 | `imported_at` | 任意 | datetime | `imported_at` | 取込時刻 |
 
 馬名は変更・同名・表記揺れがあり得るため、馬名だけで同一判定しない。
@@ -109,8 +113,8 @@ DB上の一意性は `race_date + venue + race_number` で担保する。
 | `provider_code` | 必須 | string | - | 提供元コード |
 | `source_jockey_id` | 必須 | string | - | 提供元騎手ID |
 | `name` | 必須 | string | `name` | 騎手名 |
-| `available_at` | 必須 | datetime | `available_at` | 利用可能時刻 |
-| `observed_at` | 必須 | datetime | `observed_at` | 観測時刻 |
+| `available_at` | 列必須・値nullable | datetime / 空欄 | `available_at` | 利用可能時刻。不明なら空欄 / `unknown`。 |
+| `observed_at` | 列必須・値nullable | datetime / 空欄 | `observed_at` | 観測時刻。不明なら空欄 / `unknown`。 |
 | `imported_at` | 任意 | datetime | `imported_at` | 取込時刻 |
 
 人名は同姓同名・表記揺れがあり得るため、名前だけで同一判定しない。
@@ -126,8 +130,8 @@ DB上の一意性は `race_date + venue + race_number` で担保する。
 | `source_trainer_id` | 必須 | string | - | 提供元調教師ID |
 | `name` | 必須 | string | `name` | 調教師名 |
 | `affiliation` | 任意 | string | `affiliation` | 所属。例: `美浦`、`栗東` |
-| `available_at` | 必須 | datetime | `available_at` | 利用可能時刻 |
-| `observed_at` | 必須 | datetime | `observed_at` | 観測時刻 |
+| `available_at` | 列必須・値nullable | datetime / 空欄 | `available_at` | 利用可能時刻。不明なら空欄 / `unknown`。 |
+| `observed_at` | 列必須・値nullable | datetime / 空欄 | `observed_at` | 観測時刻。不明なら空欄 / `unknown`。 |
 | `imported_at` | 任意 | datetime | `imported_at` | 取込時刻 |
 
 ### 5.5 race_entries.csv
@@ -149,8 +153,8 @@ DB上の一意性は `race_date + venue + race_number` で担保する。
 | `body_weight` | 任意 | integer | `body_weight` | 馬体重。空または1以上 |
 | `body_weight_diff` | 任意 | integer | `body_weight_diff` | 増減 |
 | `status` | 必須 | enum | `status` | `entered` / `running` / `scratched` / `excluded` |
-| `available_at` | 必須 | datetime | `available_at` | 利用可能時刻 |
-| `observed_at` | 必須 | datetime | `observed_at` | 観測時刻 |
+| `available_at` | 列必須・値nullable | datetime / 空欄 | `available_at` | 利用可能時刻。不明なら空欄 / `unknown`。 |
+| `observed_at` | 列必須・値nullable | datetime / 空欄 | `observed_at` | 観測時刻。不明なら空欄 / `unknown`。 |
 | `imported_at` | 任意 | datetime | `imported_at` | 取込時刻 |
 
 `source_race_id`、`source_horse_id`、`source_jockey_id`、`source_trainer_id` は、同一 `provider_code` 内で参照を解決する。
@@ -177,8 +181,8 @@ DB上の一意性は以下で担保する。
 | `final_odds` | 任意 | decimal | `final_odds` | 最終単勝オッズ。0より大きい値 |
 | `popularity` | 任意 | integer | `popularity` | 人気。空または1以上 |
 | `status` | 必須 | enum | `status` | `preliminary` / `confirmed` / `corrected` |
-| `available_at` | 必須 | datetime | `available_at` | 利用可能時刻 |
-| `observed_at` | 必須 | datetime | `observed_at` | 観測時刻 |
+| `available_at` | 列必須・値nullable | datetime / 空欄 | `available_at` | 利用可能時刻。不明なら空欄 / `unknown`。 |
+| `observed_at` | 列必須・値nullable | datetime / 空欄 | `observed_at` | 観測時刻。不明なら空欄 / `unknown`。 |
 | `imported_at` | 任意 | datetime | `imported_at` | 取込時刻 |
 
 DB上の一意性は `race_entry_id` で担保する。
@@ -231,10 +235,11 @@ DB上の一意性は `race_entry_id` で担保する。
 
 ### 7.4 データリーク対策
 
-- `available_at` が空の行は取り込まない。
+- `available_at` が空なら `available_at_status=unknown` として取り込み、時点依存のfeature / prediction入力には使わない。
 - 将来的な学習・分析では、基準時刻より後の `available_at` を持つ情報を使ってはいけない。
 - `observed_at` は `imported_at` より未来でも即エラーにはしないが、警告対象とする。
 - 提供元が利用可能時刻を明示しない場合、推定値を無断で事実扱いしない。推定ルールを別途記録する。
+- horse / jockey / trainerの共有master時刻は開催日ごとのML eligibilityに使わない。現在の対象選択はrace・entry・過去resultの時刻で判定する。
 
 ## 8. 重複取込時のUPSERT方針
 
@@ -250,17 +255,19 @@ DB上の一意性は `race_entry_id` で担保する。
 | テーブル | UPSERTキー | 更新対象 |
 | --- | --- | --- |
 | `races` | `id` または `race_date + venue + race_number` | レース名、発走時刻、条件、天候、馬場、status、時刻系 |
-| `horses` | `id` | 馬名、生年月日、性別、毛色、時刻系 |
-| `jockeys` | `id` | 名前、時刻系 |
-| `trainers` | `id` | 名前、所属、時刻系 |
+| `horses` | `id` | 馬名、生年月日、性別、毛色。既存行の時刻契約4列は保持。 |
+| `jockeys` | `id` | 名前。既存行の時刻契約4列は保持。 |
+| `trainers` | `id` | 名前、所属。既存行の時刻契約4列は保持。 |
 | `race_entries` | `id` または `race_id + horse_id` | 枠番、馬番、騎手、調教師、斤量、馬体重、status、時刻系 |
 | `race_results` | `id` または `race_entry_id` | 着順、状態、タイム、着差、オッズ、人気、status、時刻系 |
+
+共有masterの新規INSERT時はCSVの時刻契約4列を保存する。既存行の再importでは4列を上書きせず、既存値を保持する。`timestamp_contract_only` の日別是正でもmasterを更新しない。既存の仮時刻の是正は別作業とする。
 
 ### 8.3 更新時刻の扱い
 
 - DBの `updated_at` は更新時に取込処理側で現在時刻へ更新する。
 - `imported_at` はその行を今回取り込んだ時刻に更新する。
-- `available_at` と `observed_at` はCSV値を保存する。
+- `available_at` と `observed_at` は新規INSERTと日別3テーブルの更新時にCSV値を保存する。既存共有masterの更新時はstatusを含む時刻契約4列を保持する。
 - 既存値より古い `observed_at` のデータで上書きする場合は、原則警告またはスキップとする。
 
 ## 9. 外部IDと内部IDの扱い
