@@ -40,6 +40,8 @@ import {
 type ImportOptions = {
   csvDir: string;
   dryRun: boolean;
+  /** The caller has already loaded and verified the Production env file. */
+  skipLocalEnv?: boolean;
 };
 
 /** Preserve independent source-time evidence; never synthesize a timestamp. */
@@ -219,7 +221,7 @@ export async function validateCsvBundle(csvDir: string) {
 }
 
 export async function importCsv(options: ImportOptions) {
-  loadLocalEnv();
+  if (!options.skipLocalEnv) loadLocalEnv();
   const databaseUrl = process.env.DATABASE_URL;
 
   if (!databaseUrl) {

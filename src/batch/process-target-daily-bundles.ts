@@ -1,16 +1,18 @@
+import { execFileSync } from "node:child_process";
 import { readFile } from "node:fs/promises";
 import path from "node:path";
 
 import { discoverTargetDays } from "./discover";
+import { assertBatchConnection, assertProductionGitState, parseBatchExecution } from "./execution-guard";
+import { verifyProductionMigrationHistory } from "./migration-guard";
 import { processTargetDays } from "./pipeline";
-import { createPreviewBatchAdapter } from "./preview-adapter";
+import { createBatchAdapter } from "./preview-adapter";
 
 const args = process.argv.slice(2);
-const modes = ["--scan", "--dry-run", "--apply"].filter((mode) => args.includes(mode));
-if (modes.length !== 1) throw new Error("Exactly one of --scan, --dry-run, --apply is required");
-const mode = modes[0];
+const execution = parseBatchExecution(args);
+const { mode, environment } = execution;
 const rawRoot = path.resolve(value("--raw-root"));
-const filters = { from: optional("--from"), to: optional("--to"), venue: optional("--venue") };
+const filters = execution.filters;
 
 async function main() {
   const candidates = await discoverTargetDays(rawRoot, filters);
@@ -21,7 +23,19 @@ async function main() {
       days: candidates.map(({ date, venueCode, status }) => ({ date, venue: venueCode, status })) }));
     return;
   }
-  assertPreviewConnection();
+  if (environment === "production" && candidates.length !== 1) {
+    throw new Error("Production requires exactly one complete target day");
+  }
+  assertBatchConnection({ environment, appEnv: process.env.APP_ENV,
+    databaseUrl: process.env.DATABASE_URL,
+    supabaseUrl: process.env.NEXT_PUBLIC_SUPABASE_URL,
+    execArgv: process.execArgv, cwd: process.cwd() });
+  if (environment === "production" && mode === "--apply") {
+    assertProductionGitState(
+      execFileSync("git", ["branch", "--show-current"], { encoding: "utf8" }),
+      execFileSync("git", ["status", "--porcelain=v1"], { encoding: "utf8" }),
+    );
+  }
   const csvRoot = path.resolve(value("--csv-root"));
   if (withinRepository(rawRoot) || withinRepository(csvRoot)) {
     throw new Error("Raw TARGET and generated bundles must remain outside this repository");
@@ -37,10 +51,32 @@ async function main() {
       || Object.values(item).some((value) => typeof value !== "string"))) {
     throw new Error("Source times map must provide separately verified availableAt/observedAt strings");
   }
-  const adapter = createPreviewBatchAdapter({ csvRoot,
+  if (environment === "production") {
+    const migrationCount = await verifyProductionMigrationHistory(process.env.DATABASE_URL!);
+    console.log(JSON.stringify({ environment, connectionVerified: true, migrationCount }));
+  }
+  const adapter = createBatchAdapter({ csvRoot, environment,
+    bundleVersion: execution.bundleVersion,
     sourceTimesByDay: parsed as Record<string, { availableAt?: string; observedAt?: string }>,
     databaseUrl: process.env.DATABASE_URL! });
   try {
+    if (environment === "production") {
+      const preflight = await processTargetDays(candidates, "dry_run", adapter.operations);
+      console.log(JSON.stringify({ environment, preflight }));
+      if (preflight.days.length !== 1 || preflight.days[0].status !== "planned"
+        || preflight.totals.failed || preflight.totals.incomplete
+        || preflight.days[0].errors.length) {
+        throw new Error("Production preflight failed");
+      }
+      if (mode === "--dry-run") return;
+      if (preflight.days[0].warnings.includes("timestamp_contract_only")) {
+        throw new Error("Production timestamp correction requires a separate operation");
+      }
+      if (preflight.days[0].warnings.includes("existing_same")) {
+        console.log(JSON.stringify({ environment, status: "skipped_same", writes: 0 }));
+        return;
+      }
+    }
     const report = await processTargetDays(candidates,
       mode === "--apply" ? "apply" : "dry_run", adapter.operations);
     console.log(JSON.stringify(report));
@@ -68,21 +104,7 @@ function withinRepository(location: string): boolean {
   return relative === "" || (!relative.startsWith("..") && !path.isAbsolute(relative));
 }
 
-function assertPreviewConnection() {
-  if (process.env.APP_ENV !== "preview" || !process.env.DATABASE_URL
-    || !process.env.NEXT_PUBLIC_SUPABASE_URL) throw new Error("Preview environment is required");
-  const db = new URL(process.env.DATABASE_URL);
-  const api = new URL(process.env.NEXT_PUBLIC_SUPABASE_URL);
-  const ref = api.hostname.split(".")[0];
-  if (!["postgres:", "postgresql:"].includes(db.protocol)
-    || !db.hostname.includes("pooler.supabase.com")
-    || db.searchParams.get("sslmode") !== "require"
-    || !db.username.endsWith(`.${ref}`)) {
-    throw new Error("Preview connection identity check failed");
-  }
-}
-
 main().catch(() => {
-  console.error("Target batch stopped; inspect inputs and Preview state without exposing data or secrets");
+  console.error("Target batch stopped; inspect inputs and selected environment without exposing secrets");
   process.exitCode = 1;
 });

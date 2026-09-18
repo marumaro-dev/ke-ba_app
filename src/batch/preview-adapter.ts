@@ -43,11 +43,16 @@ type PreparedWithData = PreparedDay & {
 };
 
 /** The caller owns the one Preview connection and closes it after the batch. */
-export function createPreviewBatchAdapter(input: {
+export function createBatchAdapter(input: {
   csvRoot: string;
   sourceTimesByDay: Record<string, { availableAt?: string; observedAt?: string }>;
   databaseUrl: string;
+  environment: "preview" | "production";
+  bundleVersion?: string;
 }) {
+  if (input.environment === "production" && process.env.APP_ENV !== "production") {
+    throw new Error("Production adapter requires production APP_ENV");
+  }
   const client = postgres(input.databaseUrl, { max: 1, prepare: false });
   const db = drizzle(client, { schema });
   const data = (day: PreparedDay) => day as PreparedWithData;
@@ -63,17 +68,28 @@ export function createPreviewBatchAdapter(input: {
       if (!candidate.entriesFile || !candidate.resultsFile) throw new Error("incomplete_target_day");
       const key = `${candidate.date}/${candidate.venueCode}`;
       const sourceTimes = input.sourceTimesByDay[key] ?? {};
-      const tempRoot = await mkdtemp(path.join(os.tmpdir(), "target-batch-"));
+      const baseDir = path.join(input.csvRoot, "jra_van", candidate.date.slice(0, 4),
+        candidate.date, candidate.venueCode);
+      const tempRoot = input.environment === "preview"
+        ? await mkdtemp(path.join(os.tmpdir(), "target-batch-")) : null;
       let keepTemp = true;
       try {
-        const tempBundle = path.join(tempRoot, "bundle");
-        await convertTargetResults({
-          input: candidate.resultsFile, outputDir: tempBundle,
-          providerCode: "jra_van", raceDate: candidate.date,
-          venue: venue(candidate.venueCode), venueCode: candidate.venueCode,
-          availableAt: sourceTimes.availableAt, observedAt: sourceTimes.observedAt,
-          entriesFile: candidate.entriesFile,
-        });
+        const tempBundle = tempRoot ? path.join(tempRoot, "bundle")
+          : path.join(baseDir, input.bundleVersion ?? "");
+        if (tempRoot) {
+          await convertTargetResults({
+            input: candidate.resultsFile, outputDir: tempBundle,
+            providerCode: "jra_van", raceDate: candidate.date,
+            venue: venue(candidate.venueCode), venueCode: candidate.venueCode,
+            availableAt: sourceTimes.availableAt, observedAt: sourceTimes.observedAt,
+            entriesFile: candidate.entriesFile,
+          });
+        } else {
+          if (!input.bundleVersion || !/^v\d{3,}$/.test(input.bundleVersion)) {
+            throw new Error("Production requires a fixed existing bundle version");
+          }
+          assertInside(input.csvRoot, tempBundle);
+        }
         const report = await validateCsvBundle(tempBundle);
         const entryBytes = await readFile(candidate.entriesFile);
         const parsed = parseTargetEntriesBytes(entryBytes, {
@@ -93,11 +109,11 @@ export function createPreviewBatchAdapter(input: {
             || row.surface !== dto.race.surface || row.distanceMeters !== dto.race.distanceMeters;
         })) throw new Error("entries_results_race_mismatch");
         const sourceRaceKeys = new Map(report.races.map((row) => [row.raceNumber, row.sourceRaceId]));
-        const baseDir = path.join(input.csvRoot, "jra_van", candidate.date.slice(0, 4),
-          candidate.date, candidate.venueCode);
-        const chosen = await selectBundleVersion(baseDir, await bundleChecksum(tempBundle));
+        const chosen = tempRoot
+          ? await selectBundleVersion(baseDir, await bundleChecksum(tempBundle))
+          : { status: "existing_same" as const, version: input.bundleVersion!, directory: tempBundle };
         let bundleDir = tempBundle;
-        if (mode === "apply") {
+        if (mode === "apply" && tempRoot) {
           if (chosen.status === "new_version") {
             assertInside(input.csvRoot, chosen.directory);
             await mkdir(baseDir, { recursive: true });
@@ -112,12 +128,12 @@ export function createPreviewBatchAdapter(input: {
             results: report.rowCounts.raceResults },
           snapshotCount: dtos.length,
           dtos, sourceRaceKeys, raceDetails: report.races,
-          async cleanup() { await removeTemp(tempRoot); },
+          async cleanup() { if (tempRoot) await removeTemp(tempRoot); },
         };
         keepTemp = false;
         return prepared;
       } finally {
-        if (keepTemp) await removeTemp(tempRoot);
+        if (keepTemp && tempRoot) await removeTemp(tempRoot);
       }
     },
 
@@ -225,11 +241,13 @@ export function createPreviewBatchAdapter(input: {
     },
 
     async csvDryRun(day) {
-      const result = await importCsv({ csvDir: day.bundleDir, dryRun: true });
+      const result = await importCsv({ csvDir: day.bundleDir, dryRun: true,
+        skipLocalEnv: input.environment === "production" });
       return { failed: 0, skipped: result.counters.skippedRows, batchId: result.batchId };
     },
     async csvImport(day) {
-      const result = await importCsv({ csvDir: day.bundleDir, dryRun: false });
+      const result = await importCsv({ csvDir: day.bundleDir, dryRun: false,
+        skipLocalEnv: input.environment === "production" });
       return { failed: 0, skipped: result.counters.skippedRows, batchId: result.batchId };
     },
 

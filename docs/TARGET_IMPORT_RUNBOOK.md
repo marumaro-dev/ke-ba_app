@@ -258,6 +258,14 @@ Production用コマンドは、Preview例の `--env-file=.env.local` を `--env-
 
 ## 10. 各ステップの完了条件
 
+複数日batch CLIはPreviewが既定です。Productionではmain・cleanな作業ツリー、適用済みmigrationの一致、単一の開催日・競馬場、既存bundle versionを必須とします。新しいbundleをProductionで生成せず、Previewで検証した同じversionを指定します。例（`<raw-root>`と`<csv-root>`はリポジトリ外の既存ディレクトリ）：
+
+```powershell
+node --import tsx --env-file=.env.production.local src/batch/process-target-daily-bundles.ts --environment production --dry-run --raw-root <raw-root> --csv-root <csv-root> --from 2026-06-21 --to 2026-06-21 --venue hanshin --bundle-version v001
+```
+
+dry-runの計画・件数・競合を確認してから、同じ引数の `--dry-run` を `--apply --confirm-production` に置き換えて1回だけ実行します。Productionでは `.env.local` を使わず、forceや全期間一括applyはありません。既処理日は書き込まず、失敗時は再実行せず停止します。
+
 - コマンド終了コードが成功である。
 - target、calculated、CSV行数などが事前期待値と一致する。
 - `failed` またはfailureが0である。
