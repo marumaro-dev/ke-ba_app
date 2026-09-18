@@ -220,9 +220,23 @@ describe("feature calculator", () => {
   });
 
   it("normalizes surface values", () => {
+    expect(normalizeSurface("turf")).toBe("turf");
     expect(normalizeSurface("芝")).toBe("turf");
+    expect(normalizeSurface("dirt")).toBe("dirt");
     expect(normalizeSurface("ダート")).toBe("dirt");
     expect(normalizeSurface("障害")).toBe("other");
+    expect(normalizeSurface("unknown")).toBe("other");
+  });
+
+  it("uses canonical turf with legacy turf history without changing stored values", () => {
+    const features = calculatePhase2Features(
+      { ...target, surface: "turf" },
+      [pastPerformance({ raceDate: "2026-06-01", surface: "芝" })],
+      new Date("2026-07-04T10:00:00+09:00"),
+    );
+
+    expect(featureValue(features, "horse.surface_starts")).toBe(1);
+    expect(featureValue(features, "horse.course_starts")).toBe(1);
   });
 });
 

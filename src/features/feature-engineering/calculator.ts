@@ -1,3 +1,7 @@
+import { normalizeSurface } from "../surface";
+
+export { normalizeSurface } from "../surface";
+
 export type TargetRaceEntry = {
   raceEntryId: string;
   raceId: string;
@@ -303,16 +307,6 @@ export function getEligiblePastPerformances(
     .sort(
       (a, b) => b.scheduledStartAt.getTime() - a.scheduledStartAt.getTime(),
     );
-}
-
-export function normalizeSurface(surface: string) {
-  if (surface.includes("芝") || surface.includes("闃")) {
-    return "turf";
-  }
-  if (surface.includes("ダート") || surface.includes("繝繝ｼ繝")) {
-    return "dirt";
-  }
-  return "other";
 }
 
 function calculateTop3Rate(pastPerformances: PastPerformance[]) {

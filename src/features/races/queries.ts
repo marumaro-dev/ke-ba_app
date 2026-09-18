@@ -1,4 +1,4 @@
-import { and, asc, count, desc, eq, ilike, inArray } from "drizzle-orm";
+import { and, asc, count, desc, eq, ilike, inArray, or } from "drizzle-orm";
 
 import { getDb } from "@/db";
 import {
@@ -12,6 +12,7 @@ import {
   trainers,
 } from "@/db/schema";
 import { phase2FeatureDefinitions } from "@/features/feature-engineering/definitions";
+import { surfaceValues } from "@/features/surface";
 import { raceListPageSize, type RaceListSearchParams } from "./schemas";
 
 export async function listRaces(params: RaceListSearchParams) {
@@ -259,11 +260,21 @@ function buildRaceListConditions(params: RaceListSearchParams) {
   }
 
   if (params.surface === "turf") {
-    conditions.push(ilike(races.surface, "%芝%"));
+    conditions.push(
+      or(
+        eq(races.surface, surfaceValues.turf.canonical),
+        ilike(races.surface, `%${surfaceValues.turf.legacy}%`),
+      )!,
+    );
   }
 
   if (params.surface === "dirt") {
-    conditions.push(ilike(races.surface, "%ダート%"));
+    conditions.push(
+      or(
+        eq(races.surface, surfaceValues.dirt.canonical),
+        ilike(races.surface, `%${surfaceValues.dirt.legacy}%`),
+      )!,
+    );
   }
 
   return conditions;
