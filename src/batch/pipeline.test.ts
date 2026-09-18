@@ -21,6 +21,8 @@ function fake(overrides: Partial<DailyBatchOperations> = {}) {
     csvDryRun: vi.fn(async () => ({ failed: 0, skipped: 0, batchId: "synthetic-dry" })),
     csvImport: vi.fn(async () => ({ failed: 0, skipped: 0, batchId: "synthetic-import" })),
     snapshotDryRun: vi.fn(async () => ({ wouldInsert: 1, duplicate: 0, conflict: 0 })),
+    projectedFkDryRun: vi.fn(async () => ({ validRows: 7,
+      links: { races: 1, raceEntries: 2, horses: 2, jockeys: 1, trainers: 0 } })),
     snapshotSave: vi.fn(async () => ({ wouldInsert: 1, duplicate: 0, conflict: 0 })),
     backfillDryRun: vi.fn(async () => ({ races: 1, raceEntries: 2, horses: 2, jockeys: 1, trainers: 0 })),
     backfillSave: vi.fn(async () => ({ races: 1, raceEntries: 2, horses: 2, jockeys: 1, trainers: 0 })),
@@ -35,7 +37,7 @@ describe("daily target batch coordinator", () => {
   it("completes one date in order and permits partial jockey resolution", async () => {
     const order: string[] = [];
     const base = fake();
-    for (const name of ["prepare", "previewState", "csvDryRun", "csvImport", "snapshotDryRun",
+    for (const name of ["prepare", "previewState", "projectedFkDryRun", "csvDryRun", "csvImport", "snapshotDryRun",
       "snapshotSave", "backfillDryRun", "backfillSave", "verify"] as const) {
       const original = base[name] as (...args: never[]) => Promise<unknown>;
       (base as unknown as Record<string, unknown>)[name] = async (...args: never[]) => {
@@ -45,7 +47,7 @@ describe("daily target batch coordinator", () => {
     const report = await processTargetDays([candidate("2027-02-01")], "apply", base);
     expect(report.days[0].status).toBe("completed");
     expect(report.days[0]).toMatchObject({ jockeyLinks: 1, trainerLinks: 0 });
-    expect(order).toEqual(["prepare", "previewState", "csvDryRun", "csvImport",
+    expect(order).toEqual(["prepare", "previewState", "projectedFkDryRun", "csvDryRun", "csvImport",
       "snapshotDryRun", "snapshotSave", "backfillDryRun", "backfillSave", "verify"]);
   });
 
@@ -70,9 +72,21 @@ describe("daily target batch coordinator", () => {
     const ops = fake();
     const report = await processTargetDays([candidate("2027-02-01")], "dry_run", ops);
     expect(report.days[0].status).toBe("planned");
+    expect(report.days[0]).toMatchObject({ csvValid: 7, raceLinks: 1, raceEntryLinks: 2,
+      horseLinks: 2, jockeyLinks: 1, trainerLinks: 0, warnings: [] });
+    expect(ops.projectedFkDryRun).toHaveBeenCalledOnce();
     for (const name of ["csvDryRun", "csvImport", "snapshotSave", "backfillSave"] as const) {
       expect(ops[name]).not.toHaveBeenCalled();
     }
+  });
+
+  it("stops on an unsafe projected FK plan without any write stage", async () => {
+    const ops = fake({ projectedFkDryRun: vi.fn(async () => ({ validRows: 7,
+      links: { races: 1, raceEntries: 1, horses: 1, jockeys: 0, trainers: 0 } })) });
+    const report = await processTargetDays([candidate("2027-02-01")], "dry_run", ops);
+    expect(report.days[0].status).toBe("failed");
+    for (const name of ["csvDryRun", "csvImport", "snapshotSave", "backfillSave",
+      "applyTimestampContract"] as const) expect(ops[name]).not.toHaveBeenCalled();
   });
 
   it("treats an already imported bundle and duplicate snapshot as normal", async () => {
@@ -114,7 +128,7 @@ describe("daily target batch coordinator", () => {
     expect(dry.days[0].timestampContract).toEqual(comparison);
     expect(dry.days[0].status).toBe("planned");
     expect(ops.applyTimestampContract).not.toHaveBeenCalled();
-    for (const name of ["csvDryRun", "csvImport", "snapshotDryRun", "snapshotSave",
+    for (const name of ["projectedFkDryRun", "csvDryRun", "csvImport", "snapshotDryRun", "snapshotSave",
       "backfillDryRun", "backfillSave", "verify"] as const) {
       expect(ops[name]).not.toHaveBeenCalled();
     }
@@ -122,7 +136,7 @@ describe("daily target batch coordinator", () => {
     expect(applied.days[0].status).toBe("completed");
     expect(applied.days[0].timestampContract).toEqual(comparison);
     expect(ops.applyTimestampContract).toHaveBeenCalledOnce();
-    for (const name of ["csvDryRun", "csvImport", "snapshotDryRun", "snapshotSave",
+    for (const name of ["projectedFkDryRun", "csvDryRun", "csvImport", "snapshotDryRun", "snapshotSave",
       "backfillDryRun", "backfillSave", "verify"] as const) {
       expect(ops[name]).not.toHaveBeenCalled();
     }

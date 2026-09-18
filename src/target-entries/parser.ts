@@ -63,7 +63,9 @@ const ENTRY_COLUMNS = {
   frame: [1, 3],
   horseNumber: [3, 6],
   horseName: [6, 25],
-  sexAndJockey: [25, 37],
+  sexAge: [25, 29],
+  sexAgeMarker: [29, 30],
+  jockey: [30, 36],
   assignedWeight: [36, 41],
   interval: [41, 43],
   zi: [43, 48],
@@ -172,8 +174,9 @@ function parseEntryLine(line: string): ParsedTargetEntry {
     const [start, end] = ENTRY_COLUMNS[name];
     return sliceDisplayColumns(paddedLine, start, end).normalize("NFKC").trim();
   };
-  const sexAndJockey = field("sexAndJockey").match(/^(牡|牝|セ|騙)(\d+)\s+(\*)?(\S+)$/);
-  if (!sexAndJockey) {
+  const sexAge = field("sexAge").match(/^(牡|牝|セ|騙)(\d{1,2})$/);
+  const rawSexAgeMarker = field("sexAgeMarker");
+  if (!sexAge || (rawSexAgeMarker !== "" && rawSexAgeMarker !== "*")) {
     throw new Error("A TARGET entry row has an unsupported sex/age and jockey region.");
   }
   const weight = field("assignedWeight").match(/^(\d+(?:\.\d+)?)([▲△◇☆]?)$/);
@@ -185,7 +188,7 @@ function parseEntryLine(line: string): ParsedTargetEntry {
   }
   const horseNumber = Number(horseNumberField[1]);
   const horseName = field("horseName").replace(/^[$*]/, "");
-  const jockeyName = sexAndJockey[4];
+  const jockeyName = field("jockey");
   const interval = parseIntegerOrRawMarker(field("interval"));
   const zi = parseNumberAndRawMarker(field("zi"));
   if (!horseName || !jockeyName) throw new Error("A TARGET entry row is missing a name field.");
@@ -197,9 +200,9 @@ function parseEntryLine(line: string): ParsedTargetEntry {
       ? horseNumberField[2]
       : null,
     horseName: normalizeText(horseName),
-    sex: mapSex(sexAndJockey[1]),
-    age: Number(sexAndJockey[2]),
-    rawSexAgeMarker: sexAndJockey[3] || null,
+    sex: mapSex(sexAge[1]),
+    age: Number(sexAge[2]),
+    rawSexAgeMarker: rawSexAgeMarker || null,
     jockeyName: normalizeText(jockeyName),
     assignedWeight: Number(weight[1]),
     weightAllowanceSymbol: weight[2] || null,

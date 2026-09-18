@@ -2,7 +2,7 @@ import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
 
-import { parseTargetEntriesBytes } from "./parser";
+import { parseTargetEntriesBytes, parseTargetEntriesText } from "./parser";
 
 const observedAt = "2027-01-10T08:30:00+09:00";
 
@@ -212,6 +212,48 @@ describe("parseTargetEntriesBytes", () => {
       rawOdds: null,
       ignoredPostRaceFields: [],
     });
+  });
+
+  it("parses one- and two-digit ages without shifting fixed-width jockey and numeric fields", async () => {
+    const parsed = await parseFixture("two-digit-age.synthetic.txt", observedAt);
+    const entries = parsed.races[0].entries;
+
+    expect(entries).toHaveLength(6);
+    expect(entries.map(({ sex, age, rawSexAgeMarker }) => ({ sex, age, rawSexAgeMarker })))
+      .toEqual([
+        { sex: "male", age: 3, rawSexAgeMarker: null },
+        { sex: "male", age: 3, rawSexAgeMarker: "*" },
+        { sex: "male", age: 10, rawSexAgeMarker: null },
+        { sex: "male", age: 10, rawSexAgeMarker: "*" },
+        { sex: "female", age: 10, rawSexAgeMarker: "*" },
+        { sex: "gelding", age: 10, rawSexAgeMarker: "*" },
+      ]);
+    expect(entries[3]).toMatchObject({
+      horseNumber: 13,
+      jockeyName: "架空丁",
+      assignedWeight: 58,
+      interval: 7,
+      zi: 93,
+    });
+    expect(entries[4]).toMatchObject({
+      jockeyName: "架空戊",
+      assignedWeight: 56,
+      weightAllowanceSymbol: "△",
+    });
+    expect(entries[5]).toMatchObject({
+      jockeyName: "架空己",
+      assignedWeight: 59,
+      interval: 9,
+      zi: 95,
+    });
+  });
+
+  it("rejects unsupported sex and marker in a fixed-width age field", async () => {
+    const fixture = await readFile(fixturePath("two-digit-age.synthetic.txt"), "utf8");
+    expect(() => parseTargetEntriesText(fixture.replace("牡10*架空丁", "牛10*架空丁"), { observedAt }))
+      .toThrow("unsupported sex/age and jockey region");
+    expect(() => parseTargetEntriesText(fixture.replace("牡10*架空丁", "牡10?架空丁"), { observedAt }))
+      .toThrow("unsupported sex/age and jockey region");
   });
 
   it("requires observedAt to be supplied with an explicit timezone", async () => {

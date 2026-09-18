@@ -2,15 +2,16 @@ import { createHash } from "node:crypto";
 import { mkdtemp, mkdir, readFile, readdir, rename, rm } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
-import { and, eq, inArray } from "drizzle-orm";
+import { and, eq, inArray, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/postgres-js";
 import postgres from "postgres";
 
 import { importCsv, validateCsvBundle } from "../db/csv-import/importer";
+import { readCsvFile } from "../db/csv-import/csv-parser";
 import { backfillPreRaceLinks } from "../db/pre-race-link-backfill";
 import { createPreRaceSnapshotRepository } from "../db/pre-race-snapshot-repository";
-import { importBatches, preRaceEntrySnapshots, preRaceSnapshots, raceEntries,
-  raceResults, races } from "../db/schema";
+import { horses, importBatches, jockeys, preRaceEntrySnapshots, preRaceSnapshots,
+  raceEntries, raceResults, races, trainers } from "../db/schema";
 import * as schema from "../db/schema";
 import { createPreRaceSnapshotFingerprint } from "../pre-race-snapshots/fingerprint";
 import { mapTargetEntriesToPreRaceSnapshots } from "../pre-race-snapshots/mapper";
@@ -25,6 +26,8 @@ import { buildTimestampContractApplyPlan, compareTimestampContractBundles,
   isTimestampCorrectionTable, readTimestampContractBundle, timestampsRepresentSameInstant,
   type TimestampContractComparison } from "./timestamp-contract";
 import { bundleChecksum, selectBundleVersion } from "./versioning";
+import { planProjectedSafeFk, projectedDayIds, projectedMasterIds,
+  type ProjectedCsvRows } from "./projected-fk";
 
 const venueNames: Record<string, string> = {
   sapporo: "札幌", hakodate: "函館", fukushima: "福島", niigata: "新潟",
@@ -231,6 +234,49 @@ export function createPreviewBatchAdapter(input: {
     },
 
     async snapshotDryRun(day) { return saveSnapshots(day, "dry_run"); },
+    async projectedFkDryRun(day) {
+      const report = await validateCsvBundle(day.bundleDir);
+      const names = {
+        races: "races", horses: "horses", jockeys: "jockeys", trainers: "trainers",
+        raceEntries: "race_entries",
+      } as const;
+      const rows = {} as ProjectedCsvRows;
+      for (const [key, file] of Object.entries(names) as Array<[keyof ProjectedCsvRows, string]>) {
+        rows[key] = (await readCsvFile(path.join(day.bundleDir, `${file}.sample.csv`)))
+          .map((record) => record.values);
+      }
+      const masterIds = projectedMasterIds(rows);
+      const dayIds = projectedDayIds(rows);
+      const plan = await db.transaction(async (tx) => {
+        await tx.execute(sql`set transaction read only`);
+        const [existingRaces, existingEntries, existingHorses, existingJockeys, existingTrainers] =
+          await Promise.all([
+            tx.select({ id: races.id }).from(races).where(inArray(races.id, dayIds.races)),
+            tx.select({ id: raceEntries.id }).from(raceEntries)
+              .where(inArray(raceEntries.id, dayIds.raceEntries)),
+            tx.select({ id: horses.id, name: horses.name, birthDate: horses.birthDate,
+              sex: horses.sex, color: horses.color }).from(horses)
+              .where(inArray(horses.id, masterIds.horses)),
+            tx.select({ id: jockeys.id, name: jockeys.name }).from(jockeys)
+              .where(inArray(jockeys.id, masterIds.jockeys)),
+            tx.select({ id: trainers.id, name: trainers.name,
+              affiliation: trainers.affiliation }).from(trainers)
+              .where(inArray(trainers.id, masterIds.trainers)),
+          ]);
+        if (existingRaces.length || existingEntries.length) {
+          throw new Error("projected_day_id_conflict");
+        }
+        return planProjectedSafeFk(rows, data(day).dtos, {
+          horses: existingHorses,
+          jockeys: existingJockeys,
+          trainers: existingTrainers,
+        });
+      });
+      return { validRows: Object.values(report.rowCounts).reduce((sum, count) => sum + count, 0),
+        links: { races: plan.parent.resolved, raceEntries: plan.child.raceEntryResolved,
+          horses: plan.child.horseResolved, jockeys: plan.child.jockeyResolved,
+          trainers: plan.child.trainerResolved } };
+    },
     async snapshotSave(day) { return saveSnapshots(day, "save"); },
     async backfillDryRun(day) { return link(day, "dry_run"); },
     async backfillSave(day) { return link(day, "apply"); },

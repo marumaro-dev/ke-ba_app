@@ -21,6 +21,7 @@ export type PreparedDay = {
 };
 export type SnapshotCounts = { wouldInsert: number; duplicate: number; conflict: number };
 export type ImportCounts = { failed: number; skipped: number; batchId: string };
+export type ProjectedPlan = { validRows: number; links: LinkCounts };
 export type PreviewState = "empty" | "same" | "conflict";
 
 export interface DailyBatchOperations {
@@ -31,6 +32,7 @@ export interface DailyBatchOperations {
   csvDryRun(day: PreparedDay): Promise<ImportCounts>;
   csvImport(day: PreparedDay): Promise<ImportCounts>;
   snapshotDryRun(day: PreparedDay): Promise<SnapshotCounts>;
+  projectedFkDryRun(day: PreparedDay): Promise<ProjectedPlan>;
   snapshotSave(day: PreparedDay): Promise<SnapshotCounts>;
   backfillDryRun(day: PreparedDay): Promise<LinkCounts>;
   backfillSave(day: PreparedDay): Promise<LinkCounts>;
@@ -46,6 +48,7 @@ export type DailySummary = {
   entries: number;
   results: number;
   snapshots: number;
+  csvValid: number;
   raceLinks: number;
   raceEntryLinks: number;
   horseLinks: number;
@@ -67,7 +70,7 @@ export async function processTargetDays(
     const summary: DailySummary = {
       date: candidate.date, venue: candidate.venueCode,
       status: "incomplete", bundleVersion: null, races: 0, entries: 0, results: 0,
-      snapshots: 0, raceLinks: 0, raceEntryLinks: 0, horseLinks: 0,
+      snapshots: 0, csvValid: 0, raceLinks: 0, raceEntryLinks: 0, horseLinks: 0,
       jockeyLinks: 0, trainerLinks: 0, warnings: [], errors: [], timestampContract: null,
     };
     days.push(summary);
@@ -116,7 +119,17 @@ export async function processTargetDays(
           || snapshotCheck.wouldInsert + snapshotCheck.duplicate !== prepared.snapshotCount) {
           throw new Error("snapshot_dry_run_conflict");
         }
-        if (existing === "same" && snapshotCheck.wouldInsert === 0) {
+        if (existing === "empty") {
+          stage = "projected_fk_dry_run";
+          const projected = await operations.projectedFkDryRun(prepared);
+          assertLinks(projected.links, prepared);
+          summary.csvValid = projected.validRows;
+          summary.raceLinks = projected.links.races;
+          summary.raceEntryLinks = projected.links.raceEntries;
+          summary.horseLinks = projected.links.horses;
+          summary.jockeyLinks = projected.links.jockeys;
+          summary.trainerLinks = projected.links.trainers;
+        } else if (existing === "same" && snapshotCheck.wouldInsert === 0) {
           stage = "fk_dry_run";
           const links = await operations.backfillDryRun(prepared);
           assertLinks(links, prepared);
@@ -133,6 +146,14 @@ export async function processTargetDays(
         continue;
       }
 
+      let projectedLinks: LinkCounts | null = null;
+      if (existing === "empty") {
+        stage = "projected_fk_dry_run";
+        const projected = await operations.projectedFkDryRun(prepared);
+        assertLinks(projected.links, prepared);
+        summary.csvValid = projected.validRows;
+        projectedLinks = projected.links;
+      }
       if (existing !== "same") {
         stage = "csv_dry_run";
         const csvCheck = await operations.csvDryRun(prepared);
@@ -160,6 +181,9 @@ export async function processTargetDays(
       stage = "fk_apply";
       const links = await operations.backfillSave(prepared);
       assertLinks(links, prepared);
+      if (projectedLinks && !equalLinks(projectedLinks, links)) {
+        throw new Error("projected_actual_fk_mismatch");
+      }
       stage = "final_verify";
       const final = await operations.verify(prepared);
       if (!equalCounts(final.counts, prepared.counts) || final.snapshots !== prepared.snapshotCount) {
@@ -219,4 +243,9 @@ function assertLinks(links: LinkCounts, day: PreparedDay) {
 
 function equalCounts(a: Counts, b: Counts) {
   return a.races === b.races && a.entries === b.entries && a.results === b.results;
+}
+
+function equalLinks(a: LinkCounts, b: LinkCounts) {
+  return a.races === b.races && a.raceEntries === b.raceEntries
+    && a.horses === b.horses && a.jockeys === b.jockeys && a.trainers === b.trainers;
 }
