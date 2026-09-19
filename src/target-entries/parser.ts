@@ -179,7 +179,7 @@ function parseEntryLine(line: string): ParsedTargetEntry {
   if (!sexAge || (rawSexAgeMarker !== "" && rawSexAgeMarker !== "*")) {
     throw new Error("A TARGET entry row has an unsupported sex/age and jockey region.");
   }
-  const weight = field("assignedWeight").match(/^(\d+(?:\.\d+)?)([▲△◇☆]?)$/);
+  const weight = field("assignedWeight").match(/^(\d+(?:\.\d+)?)([▲△◇☆★]?)$/);
   if (!weight) throw new Error("A TARGET entry row has an unsupported assigned-weight field.");
   const frameNumber = parseRequiredInteger(field("frame"), "frame number");
   const horseNumberField = field("horseNumber").match(/^(\d{1,2})([*$])?$/);

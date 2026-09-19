@@ -41,7 +41,7 @@ describe("parseTargetEntriesBytes", () => {
       ignoredPostRaceFields: ["結"],
     });
     expect(second.sex).toBe("female");
-    expect(second.weightAllowanceSymbol).toBe("△");
+    expect(second.weightAllowanceSymbol).toBe("★");
     expect(third.sex).toBe("gelding");
 
     expect(first.rawFields).toEqual({
