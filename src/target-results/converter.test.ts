@@ -221,6 +221,64 @@ describe("convertTargetResults", () => {
     expect(resultRows.map((row) => row.values.source_entry_id)).toEqual([entryRows[0].values.source_entry_id]);
     expect(resultRows[0].values.finish_status).toBe("finished");
   });
+
+  it("accepts only the supported weight and affiliation markers", async () => {
+    const temporaryDirectory = await mkdtemp(path.join(tmpdir(), "target-results-"));
+    temporaryDirectories.push(temporaryDirectory);
+    const outputDir = path.join(temporaryDirectory, "output");
+    const fixturePath = path.join(
+      process.cwd(), "src/target-results/fixtures/result-markers.synthetic.txt",
+    );
+
+    const result = await convertTargetResults({
+      input: fixturePath,
+      outputDir,
+      providerCode: "jra_van",
+      raceDate: "2026-06-14",
+      venue: "架空競馬場",
+      venueCode: "synthetic",
+    });
+
+    expect(result.rowCounts.raceEntries).toBe(7);
+    expect(result.rowCounts.raceResults).toBe(7);
+    const fixture = await readFile(fixturePath, "utf8");
+    expect(fixture).toContain("51★");
+    expect(fixture).toContain("53★");
+    expect(fixture).toContain("54☆");
+    expect(fixture).toContain("52▲");
+    expect(fixture).toContain("[地]");
+    const entryRows = await readRows(outputDir, "race_entries.sample.csv");
+    expect(entryRows.map((row) => row.values.assigned_weight)).toEqual([
+      "57", "51", "53", "54", "52", "56", "50",
+    ]);
+    const resultRows = await readRows(outputDir, "race_results.sample.csv");
+    expect(resultRows.every((row) => row.values.finish_status === "finished")).toBe(true);
+    const trainerRows = await readRows(outputDir, "trainers.sample.csv");
+    expect(trainerRows.filter((row) => row.values.affiliation === "地")).toHaveLength(2);
+    expect(trainerRows.filter((row) => row.values.affiliation === "栗東")).toHaveLength(5);
+  });
+
+  it.each([
+    ["unknown weight marker", (text: string) => text.replace("51★", "51◆")],
+    ["unknown affiliation delimiter", (text: string) => text.replace("[地]", "{地}")],
+  ])("rejects an %s", async (_label, mutate) => {
+    const temporaryDirectory = await mkdtemp(path.join(tmpdir(), "target-results-"));
+    temporaryDirectories.push(temporaryDirectory);
+    const fixture = await readFile(
+      path.join(process.cwd(), "src/target-results/fixtures/result-markers.synthetic.txt"), "utf8",
+    );
+    const input = path.join(temporaryDirectory, "invalid.synthetic.txt");
+    await writeFile(input, mutate(fixture));
+
+    await expect(convertTargetResults({
+      input,
+      outputDir: path.join(temporaryDirectory, "output"),
+      providerCode: "jra_van",
+      raceDate: "2026-06-14",
+      venue: "架空競馬場",
+      venueCode: "synthetic",
+    })).rejects.toThrow("does not match the supported TARGET layout");
+  });
 });
 
 function expectReferentialIntegrity(rows: {

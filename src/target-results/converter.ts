@@ -73,7 +73,7 @@ const HEADERS = {
   ],
 } as const;
 
-const RESULT_ROW = /^\s*(\d+|止|消|失|外)\s+(\d+)\s+(\d+)\s+(.+?)\s+(牡|牝|セ|騙)\s*(\d+)\s+(.+?)\s+(\d+(?:\.\d+)?[▲△◇☆]?)\s+(\d+\.\d{2}\.\d|------)\s+(\d+\.\d|----)\s+(\d+|--)\s+(\d+|---)\s+\(([^)]*)\)(.+?)\s*$/;
+const RESULT_ROW = /^\s*(\d+|止|消|失|外)\s+(\d+)\s+(\d+)\s+(.+?)\s+(牡|牝|セ|騙)\s*(\d+)\s+(.+?)\s+(\d+(?:\.\d+)?[▲△◇☆★]?)\s+(\d+\.\d{2}\.\d|------)\s+(\d+\.\d|----)\s+(\d+|--)\s+(\d+|---)\s+(\([^)]*\)|\[地\])(.+?)\s*$/;
 
 export async function convertTargetResults(options: ConvertTargetResultsOptions) {
   validateOptions(options);
@@ -309,14 +309,14 @@ function parseResultLine(line: string) {
     horseName: normalizeName(match[4]),
     sex: match[5],
     jockeyName: normalizeName(match[7]),
-    assignedWeight: match[8].replace(/[▲△◇☆]/g, ""),
+    assignedWeight: match[8].replace(/[▲△◇☆★]/g, ""),
     finishPosition: /^\d+$/.test(finish) ? finish : "",
     finishStatus,
     isExcluded,
     finishTimeMilliseconds: parseFinishTime(match[9]),
     popularity: match[11] === "--" ? "" : match[11],
     bodyWeight: match[12] === "---" ? "" : match[12],
-    affiliation: match[13],
+    affiliation: match[13].slice(1, -1),
     trainerName: normalizeName(match[14]),
   };
 }
